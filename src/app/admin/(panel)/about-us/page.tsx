@@ -205,9 +205,9 @@ export default function AdminAboutUsListPage() {
       const data = (await apiGet("/api/admin/about-us")) as AboutUsSection[] | any
       const arr = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
       setItems(arr)
-      if (!silent) showToast({ kind: "success", title: "Güncellendi" })
+      if (!silent) showToast({ open: true, kind: "success", title: "Güncellendi" })
     } catch (e: any) {
-      showToast({ kind: "error", title: "Liste alınamadı", desc: e?.message || "Bir hata oluştu." })
+      showToast({ open: true, kind: "error", title: "Liste alınamadı", desc: e?.message || "Bir hata oluştu." })
       setItems([])
     } finally {
       setLoading(false)
@@ -231,9 +231,9 @@ export default function AdminAboutUsListPage() {
       await apiPatch(`/api/admin/about-us/${encodeURIComponent(id)}/activate`)
       // optimistik: listede tek aktif kalsın
       setItems((prev) => prev.map((x) => ({ ...x, isActive: x.id === id })))
-      showToast({ kind: "success", title: "Aktif bölüm güncellendi", desc: "Hakkımızda sayfası artık bu kaydı kullanacak." })
+      showToast({ open: true, kind: "success", title: "Aktif bölüm güncellendi", desc: "Hakkımızda sayfası artık bu kaydı kullanacak." })
     } catch (e: any) {
-      showToast({ kind: "error", title: "Aktifleştirilemedi", desc: e?.message || "Bir hata oluştu." })
+      showToast({ open: true, kind: "error", title: "Aktifleştirilemedi", desc: e?.message || "Bir hata oluştu." })
     }
   }
 
