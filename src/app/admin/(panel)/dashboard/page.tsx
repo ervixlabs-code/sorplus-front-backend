@@ -343,8 +343,8 @@ export default function AdminDashboardPage() {
       }
 
       const { items, total } = extractList<ApiComplaint>(compRaw)
-      setComplaints(items)
-      setComplaintsTotal(total)
+    setComplaints(items)
+    setComplaintsTotal(total)
     } catch (e: any) {
       setComplaints([])
       setComplaintsTotal(0)
