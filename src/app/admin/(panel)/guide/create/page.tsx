@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useMemo, useRef, useState, useEffect } from "react"
+import React, { Suspense, useMemo, useRef, useState, useEffect } from "react"
 import clsx from "clsx"
 import { Save, RefreshCcw, Plus, Trash2, ArrowLeft, Sparkles } from "lucide-react"
 import Link from "next/link"
@@ -268,7 +268,7 @@ function Toast({ state, onClose }: { state: ToastState; onClose: () => void }) {
 }
 
 /* ====================== PAGE ====================== */
-export default function AdminGuideEditorPage() {
+function AdminGuideEditorInner() {
   const router = useRouter()
   const sp = useSearchParams()
   const guideId = sp.get("id") // ?id=xxx
@@ -879,5 +879,13 @@ function SelectIcon({ value, onChange }: { value: any; onChange: (v: any) => voi
         <option value="sparkles">sparkles</option>
       </select>
     </div>
+  )
+}
+
+export default function AdminGuideEditorPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-600">Yükleniyor…</div>}>
+      <AdminGuideEditorInner />
+    </Suspense>
   )
 }
