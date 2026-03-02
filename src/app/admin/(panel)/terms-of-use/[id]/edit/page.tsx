@@ -29,18 +29,21 @@ import {
 } from "lucide-react"
 
 /* ================== API ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
-function normalizeBase(raw: string) {
-  return (raw || "").trim().replace(/\/+$/, "")
+function normalizeBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // ✅ sondaki /api varsa kırp (çünkü endpoint path'lerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
 
-function getToken() {
+const API_BASE = normalizeBase(RAW_BASE)
+
+function getToken(): string {
   if (typeof window === "undefined") return ""
   const candidates = ["sv_admin_token", "ADMIN_TOKEN", "token"]
+
   for (const key of candidates) {
     const raw = localStorage.getItem(key)
     if (!raw) continue
@@ -64,43 +67,41 @@ async function safeJson(res: Response) {
   }
 }
 
-async function apiGet(path: string) {
+async function apiRequest(path: string, init: RequestInit = {}) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
-  const res = await fetch(`${base}${path}`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...(init.headers as any),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers,
     cache: "no-store",
   })
+
   const data = await safeJson(res)
   if (!res.ok) {
-    const msg = (data && (data.message || data.error)) || `GET ${path} failed`
+    const msg = (data && (data.message || data.error)) || `${init.method || "GET"} ${path} failed`
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg))
   }
   return data
 }
 
+async function apiGet(path: string) {
+  return apiRequest(path, { method: "GET" })
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiPatch(path: string, body?: any) {
-  const token = getToken()
-  const base = normalizeBase(API_BASE)
-  const res = await fetch(`${base}${path}`, {
+  return apiRequest(path, {
     method: "PATCH",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-  const data = await safeJson(res)
-  if (!res.ok) {
-    const msg = (data && (data.message || data.error)) || `PATCH ${path} failed`
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg))
-  }
-  return data
 }
 
 /* ================== TYPES ================== */
@@ -156,6 +157,7 @@ type TermsRecord = {
   isActive?: boolean
   createdAt?: string
   updatedAt?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   content?: any
 }
 
@@ -281,6 +283,7 @@ function Select({
 export default function AdminTermsEditPage() {
   const router = useRouter()
   const params = useParams()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const id = useMemo(() => String((params as any)?.id || ""), [params])
 
   const [loading, setLoading] = useState(true)
@@ -327,6 +330,7 @@ export default function AdminTermsEditPage() {
   async function load() {
     try {
       setLoading(true)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = (await apiGet(`/api/admin/terms-of-use/${encodeURIComponent(id)}`)) as any
       const item: TermsRecord = data?.item || data?.data || data?.terms || data || { id, title: "", slug, content: {} }
 
@@ -345,6 +349,7 @@ export default function AdminTermsEditPage() {
 
       const rawSections = item?.content?.sections
       const arr = Array.isArray(rawSections) ? rawSections : []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const normalized: TermsSectionForm[] = arr.map((s: any) => ({
         id: s?.__clientId || s?.id || uid(),
         category: (s?.category as SectionCategory) || "Genel",
@@ -427,6 +432,7 @@ export default function AdminTermsEditPage() {
       const newItem = updated?.item || updated?.data || updated?.terms || updated || null
       if (newItem) setServerItem(newItem)
       alert("Kaydedildi ✅")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       alert(e?.message || "Kaydedilemedi.")
     } finally {
@@ -440,6 +446,7 @@ export default function AdminTermsEditPage() {
       await apiPatch(`/api/admin/terms-of-use/${encodeURIComponent(id)}/activate`)
       setServerItem((s) => (s ? { ...s, isActive: true } : s))
       alert("Aktif yapıldı ✅")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       alert(e?.message || "Aktifleştirilemedi.")
     } finally {
@@ -659,6 +666,7 @@ export default function AdminTermsEditPage() {
                   <div className="mb-1 text-[11px] font-light text-slate-500">Kategori</div>
                   <Select
                     value={s.category}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     onChange={(v) => updateSection(s.id, { category: v as any })}
                     options={CATEGORIES.map((c) => ({ value: c, label: c }))}
                   />
@@ -668,6 +676,7 @@ export default function AdminTermsEditPage() {
                   <div className="mb-1 text-[11px] font-light text-slate-500">Seviye</div>
                   <Select
                     value={s.level}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     onChange={(v) => updateSection(s.id, { level: v as any })}
                     options={[
                       { value: "Zorunlu", label: "Zorunlu" },
@@ -681,6 +690,7 @@ export default function AdminTermsEditPage() {
                   <div className="mb-1 text-[11px] font-light text-slate-500">İkon</div>
                   <Select
                     value={s.iconKey}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     onChange={(v) => updateSection(s.id, { iconKey: v as any })}
                     options={[
                       { value: "file", label: "FileText" },

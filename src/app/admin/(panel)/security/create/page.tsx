@@ -18,14 +18,16 @@ import {
 } from "lucide-react"
 
 /* ================== API ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
-function normalizeBase(raw: string) {
-  return (raw || "").trim().replace(/\/+$/, "")
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base "…/api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 function getToken() {
   if (typeof window === "undefined") return ""
@@ -53,9 +55,10 @@ async function safeJson(res: Response) {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiPost(path: string, body?: any) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "POST",
     headers: {
@@ -67,6 +70,7 @@ async function apiPost(path: string, body?: any) {
   })
   const data = await safeJson(res)
   if (!res.ok) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const msg = (data && ((data as any).message || (data as any).error)) || `POST ${path} failed`
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg))
   }
@@ -207,6 +211,7 @@ export default function AdminSecurityCreatePage() {
 
     if (!payload.category || !payload.title || !payload.desc) {
       showToast({
+        open: true,
         kind: "error",
         title: "Eksik bilgi",
         desc: "Kategori, Başlık ve Açıklama alanları zorunlu.",
@@ -217,16 +222,18 @@ export default function AdminSecurityCreatePage() {
     try {
       setSaving(true)
       const created = await apiPost("/api/admin/security", payload)
-      showToast({ kind: "success", title: "Kaydedildi", desc: "Yeni güvenlik bölümü oluşturuldu." }, 2200)
+      showToast({open: true, kind: "success", title: "Kaydedildi", desc: "Yeni güvenlik bölümü oluşturuldu." }, 2200)
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const id = (created as any)?.id
       if (id) {
         router.replace(`/admin/security/${encodeURIComponent(id)}/edit`)
       } else {
         router.replace("/admin/security")
       }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
-      showToast({ kind: "error", title: "Kaydedilemedi", desc: e?.message || "Bir hata oluştu." }, 4800)
+      showToast({open: true, kind: "error", title: "Kaydedilemedi", desc: e?.message || "Bir hata oluştu." }, 4800)
     } finally {
       setSaving(false)
     }

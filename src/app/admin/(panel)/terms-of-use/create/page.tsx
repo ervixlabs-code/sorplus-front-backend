@@ -27,18 +27,21 @@ import {
 } from "lucide-react"
 
 /* ================== API ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
-function normalizeBase(raw: string) {
-  return (raw || "").trim().replace(/\/+$/, "")
+function normalizeBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // ✅ sondaki /api varsa kırp (endpoint path'lerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
 
-function getToken() {
+const API_BASE = normalizeBase(RAW_BASE)
+
+function getToken(): string {
   if (typeof window === "undefined") return ""
   const candidates = ["sv_admin_token", "ADMIN_TOKEN", "token"]
+
   for (const key of candidates) {
     const raw = localStorage.getItem(key)
     if (!raw) continue
@@ -62,24 +65,37 @@ async function safeJson(res: Response) {
   }
 }
 
-async function apiPost(path: string, body?: any) {
+async function apiRequest(path: string, init: RequestInit = {}) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
-  const res = await fetch(`${base}${path}`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
+
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...(init.headers as any),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers,
+    cache: "no-store",
   })
+
   const data = await safeJson(res)
   if (!res.ok) {
-    const msg = (data && (data.message || data.error)) || `POST ${path} failed`
+    const msg = (data && (data.message || data.error)) || `${init.method || "GET"} ${path} failed`
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg))
   }
   return data
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function apiPost(path: string, body?: any) {
+  return apiRequest(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
 }
 
 /* ================== TYPES ================== */
@@ -361,6 +377,7 @@ export default function AdminTermsCreatePage() {
       const newId = item?.id
       if (newId) router.push(`/admin/terms-of-use/${encodeURIComponent(newId)}/edit`)
       else router.push("/admin/terms-of-use")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       alert(e?.message || "Kaydedilemedi.")
     } finally {
@@ -537,6 +554,7 @@ export default function AdminTermsCreatePage() {
                   <SmallLabel>Seviye</SmallLabel>
                   <Select
                     value={s.level}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     onChange={(v) => updateSection(s.id, { level: v as any })}
                     options={[
                       { value: "Zorunlu", label: "Zorunlu" },
@@ -550,6 +568,7 @@ export default function AdminTermsCreatePage() {
                   <SmallLabel>İkon</SmallLabel>
                   <Select
                     value={s.iconKey}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     onChange={(v) => updateSection(s.id, { iconKey: v as any })}
                     options={[
                       { value: "file", label: "FileText" },

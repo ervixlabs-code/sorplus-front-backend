@@ -18,9 +18,19 @@ import StatusBadge, { ComplaintStatus } from "@/components/admin/StatusBadge"
 import { useToast } from "@/components/admin/Toast"
 
 /** ================== CONFIG ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE?.trim() ||
-  "http://localhost:3002"
+const RAW_BASE = (
+  (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE ||
+  (process.env as any)?.NEXT_PUBLIC_API_BASE ||
+  "https://sorplus-admin-backend.onrender.com"
+).trim()
+
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 type ApiError = Error & { status?: number; data?: any }
 
@@ -54,6 +64,7 @@ async function api<T>(
 
   const headers: Record<string, string> = {
     ...(init?.headers as any),
+    Accept: "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
 
@@ -221,7 +232,6 @@ export default function AdminComplaintDetailPage() {
     setError(null)
     setErrorMeta(null)
 
-    // ✅ Toast: aksiyona basınca hemen geri bildirim
     if (kind === "reject") showToast("Reddediliyor…", "info")
     if (kind === "accept") showToast("Yayına alınıyor…", "info")
     if (kind === "hold") showToast("Beklemeye alındı ⏸️", "success")
@@ -249,15 +259,11 @@ export default function AdminComplaintDetailPage() {
         return
       }
 
-      // Beklet: backend endpoint yok → UI-only
       setStatus("INCELEMEDE")
       setItem((p) => (p ? { ...p, status: "PENDING" } : p))
-      // hold toast zaten atıldı
     } catch (e: any) {
       setError(e?.message || "İşlem başarısız.")
       setErrorMeta({ status: e?.status })
-
-      // ✅ Toast: error
       const code = e?.status ? ` (HTTP ${e.status})` : ""
       showToast(`İşlem başarısız${code}: ${e?.message || "Hata"}`, "error")
     } finally {
@@ -269,19 +275,20 @@ export default function AdminComplaintDetailPage() {
     <div className="space-y-6">
       {/* HEADER */}
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => router.back()}
-              className="h-10 w-10 rounded-2xl bg-white/80 border border-slate-200/80 shadow-sm hover:bg-white transition flex items-center justify-center"
+              className="h-10 w-10 rounded-2xl bg-white/80 border border-slate-200/80 shadow-sm hover:bg-white transition flex items-center justify-center shrink-0"
               title="Geri"
             >
               <ArrowLeft size={18} />
             </button>
 
-            <div>
+            <div className="min-w-0">
               <div className="text-sm text-slate-500">Şikayet Detayı</div>
-              <h1 className="text-2xl font-semibold tracking-tight">
+              {/* ✅ ID çok uzunsa taşmasın */}
+              <h1 className="text-2xl font-semibold tracking-tight break-words [overflow-wrap:anywhere]">
                 {item?.id || id}
               </h1>
             </div>
@@ -293,11 +300,12 @@ export default function AdminComplaintDetailPage() {
 
       {tokenMissing ? (
         <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-4 text-sm text-amber-900 flex items-start gap-2">
-          <AlertTriangle className="h-4 w-4 mt-0.5" />
-          <div>
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <div className="min-w-0">
             <div className="font-semibold">Token bulunamadı</div>
-            <div className="mt-1">
-              Login sonrası token’ı localStorage’a <b>sv_admin_token</b> (veya burada kontrol ettiğin key) ile kaydet.
+            <div className="mt-1 break-words [overflow-wrap:anywhere]">
+              Login sonrası token’ı localStorage’a <b>sv_admin_token</b> (veya
+              burada kontrol ettiğin key) ile kaydet.
             </div>
           </div>
         </div>
@@ -305,12 +313,12 @@ export default function AdminComplaintDetailPage() {
 
       {error ? (
         <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-800 flex items-start gap-2">
-          <AlertTriangle className="h-4 w-4 mt-0.5" />
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <div className="min-w-0">
             <div className="font-semibold">
               Hata{errorMeta?.status ? ` (HTTP ${errorMeta.status})` : ""}
             </div>
-            <div className="mt-1">{error}</div>
+            <div className="mt-1 break-words [overflow-wrap:anywhere]">{error}</div>
 
             <button
               onClick={fetchDetail}
@@ -354,13 +362,15 @@ export default function AdminComplaintDetailPage() {
         </div>
 
         {/* CENTER / CONTENT */}
-        <div className="lg:col-span-8 space-y-6">
-          <div className="rounded-2xl border border-slate-200/70 bg-white/80 p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">
+        <div className="lg:col-span-8 space-y-6 min-w-0">
+          <div className="rounded-2xl border border-slate-200/70 bg-white/80 p-6 shadow-sm min-w-0">
+            {/* ✅ Title taşmasın */}
+            <h2 className="text-lg font-semibold text-slate-900 break-words [overflow-wrap:anywhere]">
               {item?.title || (loading === "fetch" ? "Yükleniyor…" : "—")}
             </h2>
 
-            <div className="mt-4 text-sm leading-relaxed text-slate-700 whitespace-pre-line">
+            {/* ✅ Asıl fix: boşluksuz uzun metinleri bile kır */}
+            <div className="mt-4 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
               {item
                 ? (detailText(item) || "—")
                 : loading === "fetch"
@@ -368,12 +378,20 @@ export default function AdminComplaintDetailPage() {
                 : "—"}
             </div>
 
-            <div className="mt-6 pt-4 border-t border-slate-200/70 text-sm text-slate-600">
-              Kullanıcı:{" "}
-              <span className="font-semibold text-slate-900">
+            <div className="mt-6 pt-4 border-t border-slate-200/70 text-sm text-slate-600 min-w-0">
+              <span>Kullanıcı: </span>
+              <span className="font-semibold text-slate-900 break-words [overflow-wrap:anywhere]">
                 {item ? reporterName(item) : "—"}
               </span>
-              {item && reporterEmail(item) ? ` • ${reporterEmail(item)}` : ""}
+              {item && reporterEmail(item) ? (
+                <span className="text-slate-600">
+                  {" "}
+                  •{" "}
+                  <span className="break-words [overflow-wrap:anywhere]">
+                    {reporterEmail(item)}
+                  </span>
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -425,8 +443,10 @@ export default function AdminComplaintDetailPage() {
             </div>
 
             <div className="mt-4 text-xs text-slate-500">
-              • Reddet → Canlıya düşmez<br />
-              • Beklet → Taslakta / incelemede kalır<br />
+              • Reddet → Canlıya düşmez
+              <br />
+              • Beklet → Taslakta / incelemede kalır
+              <br />
               • Kabul Et → Direkt yayına alınır
             </div>
           </div>
@@ -438,9 +458,11 @@ export default function AdminComplaintDetailPage() {
 
 function Meta({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="text-slate-500">{label}</div>
-      <div className="font-semibold text-slate-900">{value}</div>
+    <div className="flex items-center justify-between gap-2 min-w-0">
+      <div className="text-slate-500 shrink-0">{label}</div>
+      <div className="font-semibold text-slate-900 text-right min-w-0 break-words [overflow-wrap:anywhere]">
+        {value}
+      </div>
     </div>
   )
 }

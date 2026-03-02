@@ -23,14 +23,16 @@ import {
 import Footer from "@/components/Footer"
 
 /* ================== API ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
-function normalizeBase(raw: string) {
-  return (raw || "").trim().replace(/\/+$/, "")
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base "…/api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 async function safeJson(res: Response) {
   const text = await res.text()
@@ -42,7 +44,7 @@ async function safeJson(res: Response) {
 }
 
 async function apiGetPublic(path: string) {
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "GET",
     headers: { Accept: "application/json" },
@@ -269,6 +271,7 @@ export default function Page() {
         const d = (await apiGetPublic(`/api/guides/${encodeURIComponent(id)}`)) as GuideApiItem
         if (!mounted) return
         setData(d)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (e: any) {
         if (!mounted) return
         setErr(e?.message || "Rehber bulunamadı.")

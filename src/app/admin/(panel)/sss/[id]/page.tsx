@@ -7,8 +7,18 @@ import clsx from "clsx"
 import { ArrowLeft, Pencil, Trash2, RefreshCcw, HelpCircle, Tag, CheckCircle2, CircleSlash } from "lucide-react"
 
 /** ================== API ================== */
-const API_BASE = (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE?.trim() || "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
+function normalizeBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // ✅ sondaki /api varsa kırp
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+
+const API_BASE = normalizeBase(RAW_BASE)
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ApiError = Error & { status?: number; data?: any }
 
 async function safeJson(res: Response) {
@@ -21,36 +31,58 @@ async function safeJson(res: Response) {
 }
 
 function getToken(): string | null {
-  try {
-    return (
-      localStorage.getItem("sv_admin_token") ||
-      localStorage.getItem("ADMIN_TOKEN") ||
-      localStorage.getItem("token") ||
-      null
-    )
-  } catch {
-    return null
+  if (typeof window === "undefined") return null
+  const keys = ["sv_admin_token", "ADMIN_TOKEN", "token"]
+
+  for (const key of keys) {
+    const raw = localStorage.getItem(key)
+    if (!raw) continue
+
+    // json olabilir: { token }, { accessToken }
+    try {
+      const obj = JSON.parse(raw)
+      const t = obj?.token || obj?.accessToken || obj
+      if (typeof t === "string" && t.length > 10) return t
+    } catch {
+      // plain string
+      if (raw.length > 10) return raw
+    }
   }
+  return null
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function api<T>(path: string, init?: RequestInit & { json?: any }): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...(init?.headers as any),
+    Accept: "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
 
   let body = init?.body
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if ((init as any)?.json !== undefined) {
     headers["Content-Type"] = "application/json"
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     body = JSON.stringify((init as any).json)
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers, body, cache: "no-store" })
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers,
+    body,
+    cache: "no-store",
+  })
+
   const data = await safeJson(res)
 
   if (!res.ok) {
-    const msg = (data && typeof data === "object" && (data.message || data.error)) || `HTTP ${res.status}`
+    const msg =
+      (data && typeof data === "object" && (data.message || data.error)) ||
+      `HTTP ${res.status}`
+
     const err: ApiError = new Error(Array.isArray(msg) ? msg.join(", ") : String(msg))
     err.status = res.status
     err.data = data
@@ -182,6 +214,7 @@ export default function AdminFaqDetailPage() {
       ])
       setCats(cc)
       setItem(found)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const detail =
         err?.data?.message && Array.isArray(err.data.message) ? err.data.message.join(", ") : err?.data?.message
@@ -217,6 +250,7 @@ export default function AdminFaqDetailPage() {
         setPendingDelete(null)
         router.push("/admin/sss")
       }, 900)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const detail =
         err?.data?.message && Array.isArray(err.data.message) ? err.data.message.join(", ") : err?.data?.message

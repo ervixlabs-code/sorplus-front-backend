@@ -8,9 +8,20 @@ import { ArrowLeft, Check, Sparkles } from "lucide-react"
 import { useToast } from "@/components/admin/Toast"
 
 /** ================== CONFIG ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE?.trim() ||
-  "http://localhost:3002"
+const RAW_BASE = (
+  (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE ||
+  (process.env as any)?.NEXT_PUBLIC_API_BASE ||
+  "https://sorplus-admin-backend.onrender.com"
+).trim()
+
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base ".../api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 type ApiError = Error & { status?: number; data?: any }
 
@@ -41,6 +52,7 @@ async function api<T>(path: string, init?: RequestInit & { json?: any }): Promis
 
   const headers: Record<string, string> = {
     ...(init?.headers as any),
+    Accept: "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
 
@@ -161,11 +173,11 @@ export default function AdminCategoryCreatePage() {
 
   async function onSave() {
     if (!canSave) {
-      showToast("error", "Eksik alan var", "Formu kontrol edip tekrar dene.")
+          showToast("Eksik alan var. Formu kontrol edip tekrar dene.", "error")
       return
     }
     if (tokenMissing) {
-      showToast("error", "Admin token yok", "Önce giriş yapıp token’ı localStorage’a yazmalısın.")
+      showToast("Eksik alan var. Formu kontrol edip tekrar dene.", "error")
       return
     }
 
@@ -198,14 +210,18 @@ export default function AdminCategoryCreatePage() {
       })
 
       showToast(
-        "success",
-        "Kategori eklendi",
-        created?.id ? `ID: ${created.id} • Listeye yönlendiriliyorsun…` : "Listeye yönlendiriliyorsun…"
+        `Kategori eklendi. ${
+          created?.id
+            ? `ID: ${created.id} • Listeye yönlendiriliyorsun…`
+            : "Listeye yönlendiriliyorsun…"
+        }`,
+        "success"
       )
+
 
       setTimeout(() => router.push("/admin/categories"), 450)
     } catch (e: any) {
-      showToast("error", "Kategori kaydedilemedi", e?.message || "Bir hata oluştu.")
+      showToast(`Kategori kaydedilemedi — ${e?.message || "Bir hata oluştu."}`, "error")
     } finally {
       setSaving(false)
     }

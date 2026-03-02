@@ -1,6 +1,8 @@
 "use client"
 
-import React, { useEffect, useMemo, useRef, useState } from "react"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import clsx from "clsx"
@@ -19,7 +21,16 @@ import {
 } from "lucide-react"
 
 /** ================== API ================== */
-const API_BASE = (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE?.trim() || "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
+
+function normalizeBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // ✅ sondaki /api varsa kırp
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+
+const API_BASE = normalizeBase(RAW_BASE)
 
 type ApiError = Error & { status?: number; data?: any }
 
@@ -33,22 +44,31 @@ async function safeJson(res: Response) {
 }
 
 function getToken(): string | null {
-  try {
-    return (
-      localStorage.getItem("sv_admin_token") ||
-      localStorage.getItem("ADMIN_TOKEN") ||
-      localStorage.getItem("token") ||
-      null
-    )
-  } catch {
-    return null
+  if (typeof window === "undefined") return null
+  const keys = ["sv_admin_token", "ADMIN_TOKEN", "token"]
+
+  for (const key of keys) {
+    const raw = localStorage.getItem(key)
+    if (!raw) continue
+
+    // json olabilir: { token }, { accessToken }
+    try {
+      const obj = JSON.parse(raw)
+      const t = obj?.token || obj?.accessToken || obj
+      if (typeof t === "string" && t.length > 10) return t
+    } catch {
+      // plain string
+      if (raw.length > 10) return raw
+    }
   }
+  return null
 }
 
 async function api<T>(path: string, init?: RequestInit & { json?: any }): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = {
     ...(init?.headers as any),
+    Accept: "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
 
@@ -58,11 +78,20 @@ async function api<T>(path: string, init?: RequestInit & { json?: any }): Promis
     body = JSON.stringify((init as any).json)
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers, body, cache: "no-store" })
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers,
+    body,
+    cache: "no-store",
+  })
+
   const data = await safeJson(res)
 
   if (!res.ok) {
-    const msg = (data && typeof data === "object" && (data.message || data.error)) || `HTTP ${res.status}`
+    const msg =
+      (data && typeof data === "object" && (data.message || data.error)) ||
+      `HTTP ${res.status}`
+
     const err: ApiError = new Error(Array.isArray(msg) ? msg.join(", ") : String(msg))
     err.status = res.status
     err.data = data
@@ -157,8 +186,8 @@ function Toast({
   )
 }
 
-/** ===================== Page ===================== */
-export default function AdminFaqPage() {
+/** ===================== INNER (useSearchParams burada) ===================== */
+function AdminFaqInner() {
   const router = useRouter()
   const pathname = usePathname()
   const sp = useSearchParams()
@@ -218,8 +247,8 @@ export default function AdminFaqPage() {
 
       // newest first: updatedAt -> createdAt -> id fallback
       const sorted = [...faqsRes].sort((a, b) => {
-        const da = (a.updatedAt || a.createdAt || "") + ""
-        const db = (b.updatedAt || b.createdAt || "") + ""
+        const da = String(a.updatedAt || a.createdAt || "")
+        const db = String(b.updatedAt || b.createdAt || "")
         if (da && db && da !== db) return db.localeCompare(da)
         return String(b.id).localeCompare(String(a.id))
       })
@@ -279,71 +308,54 @@ export default function AdminFaqPage() {
   const [pendingDelete, setPendingDelete] = useState<{ ids: string[]; open: boolean } | null>(null)
 
   async function commitDelete(ids: string[]) {
-    // sırayla sil (backend batch yok)
     for (const id of ids) {
       await api(`/api/admin/faqs/${encodeURIComponent(id)}`, { method: "DELETE" })
     }
   }
 
   function deleteOne(id: string) {
-    try {
-      if (undoTimer.current) window.clearTimeout(undoTimer.current)
+    if (undoTimer.current) window.clearTimeout(undoTimer.current)
 
-      // UI'da hemen kaldır
-      setItems((prev) => prev.filter((x) => x.id !== id))
-      setPendingDelete({ ids: [id], open: true })
-      showToast("success", "SSS silindi", "5 saniye içinde geri alabilirsin.", 5000)
+    setItems((prev) => prev.filter((x) => x.id !== id))
+    setPendingDelete({ ids: [id], open: true })
+    showToast("success", "SSS silindi", "5 saniye içinde geri alabilirsin.", 5000)
 
-      undoTimer.current = window.setTimeout(async () => {
-        try {
-          await commitDelete([id])
-        } catch (err: any) {
-          const detail =
-            err?.data?.message && Array.isArray(err.data.message) ? err.data.message.join(", ") : err?.data?.message
-          showToast("error", "Silinemedi", detail || err?.message || "Bir hata oluştu.")
-          // Silinemediyse listeyi yeniden çekelim
-          fetchAll()
-        } finally {
-          setPendingDelete(null)
-        }
-      }, 5000)
-    } catch {
-      showToast("error", "Bir hata oluştu", "SSS silinemedi.")
-    }
+    undoTimer.current = window.setTimeout(async () => {
+      try {
+        await commitDelete([id])
+      } catch (err: any) {
+        const detail =
+          err?.data?.message && Array.isArray(err.data.message) ? err.data.message.join(", ") : err?.data?.message
+        showToast("error", "Silinemedi", detail || err?.message || "Bir hata oluştu.")
+        fetchAll()
+      } finally {
+        setPendingDelete(null)
+      }
+    }, 5000)
   }
 
   function bulkDelete() {
     if (selectedIds.length === 0) return
+    if (undoTimer.current) window.clearTimeout(undoTimer.current)
 
-    try {
-      if (undoTimer.current) window.clearTimeout(undoTimer.current)
+    const ids = [...selectedIds]
+    setSelected({})
+    setItems((prev) => prev.filter((x) => !ids.includes(x.id)))
+    setPendingDelete({ ids, open: true })
+    showToast("success", "SSS kayıtları silindi", `${ids.length} kayıt silindi. 5 saniye içinde geri alabilirsin.`, 5000)
 
-      const ids = [...selectedIds]
-      setSelected({})
-      setItems((prev) => prev.filter((x) => !ids.includes(x.id)))
-      setPendingDelete({ ids, open: true })
-      showToast(
-        "success",
-        "SSS kayıtları silindi",
-        `${ids.length} kayıt silindi. 5 saniye içinde geri alabilirsin.`,
-        5000
-      )
-
-      undoTimer.current = window.setTimeout(async () => {
-        try {
-          await commitDelete(ids)
-        } catch (err: any) {
-          const detail =
-            err?.data?.message && Array.isArray(err.data.message) ? err.data.message.join(", ") : err?.data?.message
-          showToast("error", "Toplu silme başarısız", detail || err?.message || "Bir hata oluştu.")
-          fetchAll()
-        } finally {
-          setPendingDelete(null)
-        }
-      }, 5000)
-    } catch {
-      showToast("error", "Bir hata oluştu", "Toplu silme başarısız.")
-    }
+    undoTimer.current = window.setTimeout(async () => {
+      try {
+        await commitDelete(ids)
+      } catch (err: any) {
+        const detail =
+          err?.data?.message && Array.isArray(err.data.message) ? err.data.message.join(", ") : err?.data?.message
+        showToast("error", "Toplu silme başarısız", detail || err?.message || "Bir hata oluştu.")
+        fetchAll()
+      } finally {
+        setPendingDelete(null)
+      }
+    }, 5000)
   }
 
   function undoDelete() {
@@ -351,7 +363,6 @@ export default function AdminFaqPage() {
     if (undoTimer.current) window.clearTimeout(undoTimer.current)
     setPendingDelete(null)
     showToast("success", "Geri alındı")
-    // En garanti: server'ı tekrar çek
     fetchAll()
   }
 
@@ -418,9 +429,7 @@ export default function AdminFaqPage() {
                 <input
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") applySearch()
-                  }}
+                  onKeyDown={(e) => e.key === "Enter" && applySearch()}
                   placeholder="ID, soru, cevap veya kategori ara..."
                   className="w-full rounded-2xl border border-slate-200/80 bg-white/80 pl-10 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-200 shadow-sm"
                 />
@@ -566,13 +575,18 @@ export default function AdminFaqPage() {
                   </td>
 
                   <td className="px-5 py-4 align-top">
-                    <span className={clsx("inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold", badgeStatus(it.status))}>
+                    <span
+                      className={clsx(
+                        "inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold",
+                        badgeStatus(it.status)
+                      )}
+                    >
                       {labelStatus(it.status)}
                     </span>
                   </td>
 
                   <td className="px-5 py-4 align-top">
-                    <div className="text-sm text-slate-700">{(it.updatedAt as any) ?? (it.createdAt as any) ?? "—"}</div>
+                    <div className="text-sm text-slate-700">{it.updatedAt ?? it.createdAt ?? "—"}</div>
                   </td>
 
                   <td className="px-5 py-4 align-top text-right">
@@ -667,5 +681,14 @@ export default function AdminFaqPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+/** ===================== PAGE (Suspense fix) ===================== */
+export default function AdminFaqPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-600">Yükleniyor…</div>}>
+      <AdminFaqInner />
+    </Suspense>
   )
 }

@@ -20,7 +20,7 @@ import {
 } from "lucide-react"
 
 export const ADMIN_NAV = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/complaints", label: "Şikayetler", icon: MessageSquareWarning },
   { href: "/admin/categories", label: "Kategoriler", icon: Tags },
   { href: "/admin/users", label: "Kullanıcılar", icon: Users },
@@ -40,7 +40,6 @@ export const ADMIN_NAV = [
 
   { href: "/admin/sss", label: "Sıkça Sorulan Sorular", icon: FileQuestionIcon },
   { href: "/admin/sss-kategoriler", label: "Sıkça Sorulan Sorular Kategorileri", icon: HelpCircle },
-  { href: "/admin/settings", label: "Ayarlar", icon: Settings },
 ]
 
 export default function Sidebar() {
@@ -60,7 +59,7 @@ export default function Sidebar() {
             <div className="h-3 w-3 rounded-full bg-orange-500 shadow-[0_0_18px_rgba(249,115,22,0.55)]" />
           </div>
           <div className="leading-tight">
-            <div className="text-white font-semibold tracking-tight">Sikayetvar</div>
+            <div className="text-white font-semibold tracking-tight">Sorplus</div>
             <div className="text-[11px] text-slate-300/80">Admin Control</div>
           </div>
         </div>

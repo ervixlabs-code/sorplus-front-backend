@@ -7,14 +7,16 @@ import clsx from "clsx"
 import { Plus, Trash2, Pencil, CheckCircle2, RefreshCcw, Undo2 } from "lucide-react"
 
 /* ================== API ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
-function normalizeBase(raw: string) {
-  return (raw || "").trim().replace(/\/+$/, "")
+function normalizeBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // ✅ sondaki /api varsa kırp (endpoint’lerde zaten /api/... kullanıyoruz)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
+
+const API_BASE = normalizeBase(RAW_BASE)
 
 function getToken() {
   if (typeof window === "undefined") return ""
@@ -44,7 +46,7 @@ async function safeJson(res: Response) {
 
 async function apiGet(path: string) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "GET",
     headers: {
@@ -61,9 +63,10 @@ async function apiGet(path: string) {
   return data
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiPatch(path: string, body?: any) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "PATCH",
     headers: {
@@ -83,7 +86,7 @@ async function apiPatch(path: string, body?: any) {
 
 async function apiDelete(path: string) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "DELETE",
     headers: {
@@ -106,6 +109,7 @@ type GuideItem = {
   createdAt: string
   updatedAt: string
   isActive: boolean
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   content: any
 }
 
@@ -197,9 +201,10 @@ export default function AdminGuideListPage() {
       setLoading(true)
       const data = (await apiGet("/api/admin/guides")) as GuideItem[]
       setItems(Array.isArray(data) ? data : [])
-      showToast({ kind: "success", title: "Güncellendi" })
+      showToast({open: true, kind: "success", title: "Güncellendi" })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
-      showToast({ kind: "error", title: "Liste alınamadı", desc: e?.message || "Bir hata oluştu." })
+      showToast({ open: true, kind: "error", title: "Liste alınamadı", desc: e?.message || "Bir hata oluştu." })
     } finally {
       setLoading(false)
     }
@@ -222,9 +227,10 @@ export default function AdminGuideListPage() {
       await apiPatch(`/api/admin/guides/${encodeURIComponent(id)}/activate`)
       // optimistik: listede tek aktif kalsın
       setItems((prev) => prev.map((x) => ({ ...x, isActive: x.id === id })))
-      showToast({ kind: "success", title: "Aktif içerik güncellendi", desc: "Web /rehber sayfası artık bu kaydı kullanacak." })
+      showToast({open: true, kind: "success", title: "Aktif içerik güncellendi", desc: "Web /rehber sayfası artık bu kaydı kullanacak." })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
-      showToast({ kind: "error", title: "Aktifleştirilemedi", desc: e?.message || "Bir hata oluştu." })
+      showToast({ open: true, kind: "error", title: "Aktifleştirilemedi", desc: e?.message || "Bir hata oluştu." })
     }
   }
 
@@ -245,11 +251,12 @@ export default function AdminGuideListPage() {
       try {
         pendingDeleteRef.current = null
         await apiDelete(`/api/admin/guides/${encodeURIComponent(id)}`)
-        showToast({ kind: "success", title: "Silindi", desc: "Kayıt kalıcı olarak silindi." })
+        showToast({open: true, kind: "success", title: "Silindi", desc: "Kayıt kalıcı olarak silindi." })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (e: any) {
         // delete fail olursa: listede geri gösterelim
         setItems((prev) => [target, ...prev])
-        showToast({ kind: "error", title: "Silinemedi", desc: e?.message || "Bir hata oluştu." })
+        showToast({ open: true, kind: "error", title: "Silinemedi", desc: e?.message || "Bir hata oluştu." })
       }
     }, 5000)
 
@@ -257,6 +264,7 @@ export default function AdminGuideListPage() {
 
     showToast(
       {
+        open: true,
         kind: "success",
         title: "Silindi (geri alınabilir)",
         desc: "5 saniye içinde geri alabilirsin.",
@@ -267,7 +275,7 @@ export default function AdminGuideListPage() {
           const restore = pendingDeleteRef.current.item
           pendingDeleteRef.current = null
           setItems((prev) => [restore, ...prev])
-          showToast({ kind: "success", title: "Geri alındı", desc: "Kayıt geri getirildi." })
+          showToast({open: true, kind: "success", title: "Geri alındı", desc: "Kayıt geri getirildi." })
         },
       },
       5200

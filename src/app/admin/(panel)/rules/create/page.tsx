@@ -24,14 +24,16 @@ import {
 } from "lucide-react"
 
 /* ================== API ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
-function normalizeBase(raw: string) {
-  return (raw || "").trim().replace(/\/+$/, "")
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base "…/api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 function getToken() {
   if (typeof window === "undefined") return ""
@@ -59,9 +61,10 @@ async function safeJson(res: Response) {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiPost(path: string, body: any) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "POST",
     headers: {
@@ -117,6 +120,7 @@ const CATEGORIES: RuleCategory[] = [
 
 const LEVELS: RuleLevel[] = ["Zorunlu", "Öneri", "Bilgi"]
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ICONS: Array<{ key: RuleIconKey; label: string; Icon: any }> = [
   { key: "sparkles", label: "Sparkles", Icon: Sparkles },
   { key: "shield", label: "Shield", Icon: Shield },
@@ -212,8 +216,10 @@ export default function AdminRulesCreatePage() {
       }
 
       const data = await apiPost("/api/admin/rules", payload)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const newId = (data as any)?.item?.id
       router.push(newId ? `/admin/rules/${encodeURIComponent(newId)}/edit` : "/admin/rules")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       alert(e?.message || "Kaydedilemedi")
     } finally {
@@ -355,6 +361,7 @@ export default function AdminRulesCreatePage() {
                     <select
                       value={r.category}
                       onChange={(e) =>
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         setRules((prev) => prev.map((x) => (x.id === r.id ? { ...x, category: e.target.value as any } : x)))
                       }
                       className="mt-2 h-[46px] w-full rounded-2xl border border-slate-200/80 bg-white px-3 text-sm outline-none focus:ring-4 focus:ring-slate-200/70"
@@ -372,6 +379,7 @@ export default function AdminRulesCreatePage() {
                     <select
                       value={r.level}
                       onChange={(e) =>
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         setRules((prev) => prev.map((x) => (x.id === r.id ? { ...x, level: e.target.value as any } : x)))
                       }
                       className="mt-2 h-[46px] w-full rounded-2xl border border-slate-200/80 bg-white px-3 text-sm outline-none focus:ring-4 focus:ring-slate-200/70"
@@ -389,6 +397,7 @@ export default function AdminRulesCreatePage() {
                     <select
                       value={r.iconKey}
                       onChange={(e) =>
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         setRules((prev) => prev.map((x) => (x.id === r.id ? { ...x, iconKey: e.target.value as any } : x)))
                       }
                       className="mt-2 h-[46px] w-full rounded-2xl border border-slate-200/80 bg-white px-3 text-sm outline-none focus:ring-4 focus:ring-slate-200/70"

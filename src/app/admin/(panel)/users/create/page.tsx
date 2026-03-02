@@ -5,12 +5,18 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import clsx from "clsx"
-import { ArrowLeft, Check, Sparkles, Eye, EyeOff } from "lucide-react"
+import { ArrowLeft, Check, Sparkles, Eye, EyeOff, Phone, MapPin } from "lucide-react"
 import { useToast } from "@/components/admin/Toast"
 
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE?.trim() ||
-  "http://localhost:3002"
+/** ================== CONFIG ================== */
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
+
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 type ApiError = Error & { status?: number; data?: any }
 
@@ -73,10 +79,10 @@ async function api<T>(
 
   if (!res.ok) {
     const msg =
-      (data && typeof data === "object" && (data.message || data.error)) ||
+      (data && typeof data === "object" && ((data as any).message || (data as any).error)) ||
       `HTTP ${res.status}`
 
-    const err: ApiError = new Error(Array.isArray(msg) ? msg.join(", ") : String(msg))
+    const err: ApiError = new Error(Array.isArray(msg) ? msg.join(" • ") : String(msg))
     err.status = res.status
     err.data = data
     throw err
@@ -86,6 +92,11 @@ async function api<T>(
 }
 
 type Role = "USER" | "ADMIN" | "MODERATOR"
+
+// E.164 basic: + ve 10-15 digit
+function isValidE164(phone: string) {
+  return /^\+\d{10,15}$/.test(phone.trim())
+}
 
 export default function AdminUserCreatePage() {
   const router = useRouter()
@@ -104,10 +115,12 @@ export default function AdminUserCreatePage() {
 
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("") // ✅ yeni
+  const [city, setCity] = useState("") // ✅ yeni
   const [password, setPassword] = useState("")
   const [showPw, setShowPw] = useState(false)
 
-  const [kvkkApproved, setKvkkApproved] = useState(false) // UI bilgisi, backend DTO’da yoksa göndermiyoruz
+  const [kvkkApproved, setKvkkApproved] = useState(false) // UI-only
   const [role, setRole] = useState<Role>("USER")
   const [saving, setSaving] = useState(false)
 
@@ -115,13 +128,18 @@ export default function AdminUserCreatePage() {
     const e: Record<string, string> = {}
     const name = fullName.trim()
     const mail = email.trim()
+    const ph = phone.trim()
+    const ct = city.trim()
     const pw = password
 
     if (name.length < 3) e.fullName = "Ad soyad en az 3 karakter olmalı."
     if (!/^\S+@\S+\.\S+$/.test(mail)) e.email = "Geçerli bir e-posta gir."
+    if (ct.length < 2) e.city = "Şehir zorunlu."
+    if (!isValidE164(ph)) e.phone = "Telefon E.164 formatında olmalı. Örn: +905551112233"
     if (typeof pw !== "string" || pw.length < 6) e.password = "Şifre en az 6 karakter olmalı."
+
     return e
-  }, [fullName, email, password])
+  }, [fullName, email, phone, city, password])
 
   const canSave = useMemo(
     () => mounted && !!token && Object.keys(errors).length === 0 && !saving,
@@ -132,36 +150,42 @@ export default function AdminUserCreatePage() {
     if (!mounted) return
 
     if (!token) {
-      showToast("error", "Token yok", "Admin login token’ı bulunamadı.")
+      showToast("Token yok. Admin login token’ı bulunamadı.", "error")
       return
     }
 
     if (Object.keys(errors).length > 0) {
-      showToast("error", "Eksik/Hatalı alan var", "Formu kontrol edip tekrar dene.")
+      showToast("Eksik/Hatalı alan var. Formu kontrol edip tekrar dene.", "error")
       return
     }
 
     setSaving(true)
     try {
       const mail = email.trim().toLowerCase()
+      const ph = phone.trim()
+      const ct = city.trim()
       const { firstName, lastName } = splitNameSmart(fullName)
 
-      // ✅ DTO’ya göre: isActive yok, password zorunlu, lastName boş olamaz
+      // ✅ backend istiyor: phone + city
       const payload: any = {
         email: mail,
         firstName,
         lastName,
         password: String(password),
         role,
-        // kvkkApproved: backend dto yoksa GÖNDERME (whitelist patlatır)
+        phone: ph,
+        city: ct,
+        // kvkkApproved backend DTO’da varsa açarız; şimdilik göndermiyoruz
       }
+
+      console.log("[AdminUserCreate] API_BASE:", API_BASE)
+      console.log("[AdminUserCreate] POST:", `${API_BASE}/api/admin/users`, payload)
 
       await api(`/api/admin/users`, { method: "POST", json: payload }, token)
 
       showToast(
-        "success",
-        "Kullanıcı eklendi",
-        kvkkApproved ? "KVKK: Onaylı • Listeye yönlendiriliyorsun…" : "Listeye yönlendiriliyorsun…"
+        `Kullanıcı eklendi. ${kvkkApproved ? "KVKK: Onaylı • " : ""}Listeye yönlendiriliyorsun…`,
+        "success"
       )
 
       router.push("/admin/users")
@@ -170,16 +194,15 @@ export default function AdminUserCreatePage() {
       const status = e?.status
       const raw = e?.data
 
-      // backend message array ise güzel göster
       const msg =
         raw?.message && Array.isArray(raw.message)
           ? raw.message.join(" • ")
           : e?.message || "Kullanıcı kaydedilemedi."
 
-      if (status === 400) showToast("error", "Bad Request (400)", msg)
-      else if (status === 409) showToast("error", "Çakışma (409)", msg)
-      else if (status === 401) showToast("error", "Yetkisiz (401)", "Token expired olabilir. Tekrar login ol.")
-      else showToast("error", "Bir hata oluştu", msg)
+      if (status === 400) showToast(`Bad Request (400). ${msg}`, "error")
+      else if (status === 409) showToast(`Çakışma (409). ${msg}`, "error")
+      else if (status === 401) showToast("Yetkisiz (401). Token expired olabilir. Tekrar login ol.", "error")
+      else showToast(`Bir hata oluştu. ${msg}`, "error")
     } finally {
       setSaving(false)
     }
@@ -191,6 +214,9 @@ export default function AdminUserCreatePage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Kullanıcı Ekle</h1>
           <p className="text-slate-500 mt-1">Yeni kullanıcı oluştur</p>
+          <p className="text-xs text-slate-400 mt-1">
+            API: <span className="font-mono">{API_BASE}</span>
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -218,7 +244,8 @@ export default function AdminUserCreatePage() {
 
       {tokenMissing ? (
         <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-4 text-sm text-amber-900">
-          Admin token bulunamadı. Login sonrası token’ı localStorage’a <b>sv_admin_token</b> (veya ADMIN_TOKEN/token) ile kaydetmelisin.
+          Admin token bulunamadı. Login sonrası token’ı localStorage’a <b>sv_admin_token</b> (veya ADMIN_TOKEN/token) ile
+          kaydetmelisin.
         </div>
       ) : null}
 
@@ -255,6 +282,43 @@ export default function AdminUserCreatePage() {
                 )}
               />
               {errors.email ? <div className="mt-2 text-xs font-semibold text-rose-600">{errors.email}</div> : null}
+            </div>
+
+            {/* ✅ Telefon */}
+            <div>
+              <div className="text-xs font-semibold text-slate-600 mb-2">Telefon</div>
+              <div className="relative">
+                <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Örn: +905551112233"
+                  className={clsx(
+                    "w-full rounded-2xl border bg-white/80 pl-10 pr-4 py-3 text-sm outline-none shadow-sm focus:ring-2 focus:ring-orange-200",
+                    errors.phone ? "border-rose-300" : "border-slate-200/80"
+                  )}
+                />
+              </div>
+              {errors.phone ? <div className="mt-2 text-xs font-semibold text-rose-600">{errors.phone}</div> : null}
+              <div className="mt-2 text-xs text-slate-500">Format: <b>+90</b> ile başla, boşluk/(-) kullanma.</div>
+            </div>
+
+            {/* ✅ Şehir */}
+            <div>
+              <div className="text-xs font-semibold text-slate-600 mb-2">Şehir</div>
+              <div className="relative">
+                <MapPin size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="Örn: İstanbul"
+                  className={clsx(
+                    "w-full rounded-2xl border bg-white/80 pl-10 pr-4 py-3 text-sm outline-none shadow-sm focus:ring-2 focus:ring-orange-200",
+                    errors.city ? "border-rose-300" : "border-slate-200/80"
+                  )}
+                />
+              </div>
+              {errors.city ? <div className="mt-2 text-xs font-semibold text-rose-600">{errors.city}</div> : null}
             </div>
 
             <div>
@@ -325,6 +389,13 @@ export default function AdminUserCreatePage() {
               <div className="mt-5 rounded-2xl border border-slate-200/70 bg-white/80 p-4">
                 <div className="text-sm font-semibold text-slate-900">{fullName.trim() || "Ad Soyad"}</div>
                 <div className="mt-1 text-xs text-slate-500">{email.trim() || "user@mail.com"}</div>
+
+                <div className="mt-2 text-xs text-slate-500">
+                  <span className="font-semibold text-slate-900">Telefon:</span> {phone.trim() || "—"}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  <span className="font-semibold text-slate-900">Şehir:</span> {city.trim() || "—"}
+                </div>
 
                 <div className="mt-4 flex items-center justify-between">
                   <span

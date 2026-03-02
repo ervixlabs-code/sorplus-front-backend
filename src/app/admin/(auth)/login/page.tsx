@@ -1,7 +1,9 @@
 // src/app/admin/(auth)/login/page.tsx
 "use client"
 
-import React, { useMemo, useState } from "react"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import React, { Suspense, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import clsx from "clsx"
@@ -16,8 +18,17 @@ import {
   AlertTriangle,
 } from "lucide-react"
 
-const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3002").replace(/\/+$/, "")
+/* ===================== API BASE ===================== */
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
+
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base "…/api" ile bitiyorsa kırp (çünkü endpointlerde zaten /api/... kullanıyoruz)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 const TOKEN_KEY = "sv_admin_token"
 const USER_KEY = "sv_admin_user"
@@ -43,7 +54,8 @@ function roleAllowed(role?: string): role is "ADMIN" | "MODERATOR" {
   return role === "ADMIN" || role === "MODERATOR"
 }
 
-export default function AdminLoginPage() {
+/** ✅ useSearchParams burada: Suspense içinde render edilecek */
+function LoginInner() {
   const router = useRouter()
   const sp = useSearchParams()
 
@@ -76,9 +88,7 @@ export default function AdminLoginPage() {
       const data = await safeJson(res)
 
       if (!res.ok) {
-        // backend mesajı varsa göster
         const msg =
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (data && typeof data === "object" && ("message" in data ? (data as any).message : null)) ||
           "Giriş başarısız. E-posta/şifre kontrol et."
         setError(Array.isArray(msg) ? msg.join(", ") : String(msg))
@@ -97,18 +107,15 @@ export default function AdminLoginPage() {
 
       // 2) ROLE CHECK: sadece ADMIN veya MODERATOR
       if (!roleAllowed(user.role)) {
-        // token saklama — güvenlik için saklamıyoruz
         setError("Bu panele erişim yetkin yok. (Sadece ADMIN / MODERATOR)")
         return
       }
 
-      // 3) TOKEN’ı sakla (panel isteklerinde kullanacağız)
+      // 3) TOKEN’ı sakla
       try {
         localStorage.setItem(TOKEN_KEY, accessToken)
         localStorage.setItem(USER_KEY, JSON.stringify(user))
-      } catch {
-        // storage kapalıysa bile login devam etsin
-      }
+      } catch {}
 
       router.push(nextUrl)
     } catch {
@@ -133,7 +140,7 @@ export default function AdminLoginPage() {
           <div className="hidden lg:flex flex-col justify-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[12px] text-slate-200 w-fit">
               <Sparkles className="h-4 w-4 text-orange-300" />
-              ŞikayetVar Admin • Güvenli Yönetim Paneli
+              SorPlus Admin • Güvenli Yönetim Paneli
             </div>
 
             <h1 className="mt-4 text-4xl font-semibold leading-tight">
@@ -164,16 +171,10 @@ export default function AdminLoginPage() {
                   <Lock className="mt-0.5 h-5 w-5 text-sky-300" />
                   <div>
                     <div className="text-sm font-medium">JWT ile güvenli oturum</div>
-                    <div className="text-sm text-slate-300">
-                      Token’ı panel isteklerinde kullanacağız.
-                    </div>
+                    <div className="text-sm text-slate-300">Token’ı panel isteklerinde kullanacağız.</div>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div className="mt-8 text-xs text-slate-400">
-              Backend: <span className="text-slate-200">{API_BASE}</span>
             </div>
           </div>
 
@@ -199,9 +200,7 @@ export default function AdminLoginPage() {
                 )}
 
                 <div>
-                  <label className="mb-2 block text-[12px] font-medium text-slate-300">
-                    E-posta
-                  </label>
+                  <label className="mb-2 block text-[12px] font-medium text-slate-300">E-posta</label>
                   <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-3 focus-within:border-orange-300/40">
                     <Mail className="h-4 w-4 text-slate-300" />
                     <input
@@ -216,9 +215,7 @@ export default function AdminLoginPage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-[12px] font-medium text-slate-300">
-                    Şifre
-                  </label>
+                  <label className="mb-2 block text-[12px] font-medium text-slate-300">Şifre</label>
                   <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-3 focus-within:border-orange-300/40">
                     <Lock className="h-4 w-4 text-slate-300" />
                     <input
@@ -251,9 +248,7 @@ export default function AdminLoginPage() {
                   )}
                 >
                   {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
-                  {!loading && (
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                  )}
+                  {!loading && <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />}
                 </button>
 
                 <div className="flex items-center justify-between text-xs text-slate-400">
@@ -267,18 +262,24 @@ export default function AdminLoginPage() {
               <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
                 <div className="font-medium text-slate-200">Not</div>
                 <div className="mt-1 text-slate-400">
-                  Giriş başarılı olsa bile rolün <span className="text-slate-200">USER</span> ise panele
-                  alınmaz.
+                  Giriş başarılı olsa bile rolün <span className="text-slate-200">USER</span> ise panele alınmaz.
                 </div>
               </div>
 
-              <div className="mt-4 text-center text-[11px] text-slate-500">
-                © {new Date().getFullYear()} ŞikayetVar Admin
-              </div>
+              <div className="mt-4 text-center text-[11px] text-slate-500">© {new Date().getFullYear()} SorPlus Admin</div>
             </div>
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+/** ✅ Suspense boundary: build/prerender hatasını çözer */
+export default function AdminLoginPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-600">Yükleniyor…</div>}>
+      <LoginInner />
+    </Suspense>
   )
 }

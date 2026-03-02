@@ -21,9 +21,20 @@ import {
 import { useToast } from "@/components/admin/Toast"
 
 /** ================== CONFIG ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE?.trim() ||
-  "http://localhost:3002"
+const RAW_BASE = (
+  (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE ||
+  (process.env as any)?.NEXT_PUBLIC_API_BASE ||
+  "https://sorplus-admin-backend.onrender.com"
+).trim()
+
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base ".../api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 type ApiError = Error & { status?: number; data?: any }
 
@@ -54,6 +65,7 @@ async function api<T>(path: string, init?: RequestInit & { json?: any }): Promis
 
   const headers: Record<string, string> = {
     ...(init?.headers as any),
+    Accept: "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
 
@@ -259,7 +271,7 @@ export default function AdminCategoriesPage() {
       setItems([])
       setTotal(0)
       setError(e?.message || "Kategoriler alınamadı.")
-      showToast("error", "Liste alınamadı", e?.message || "Bir hata oluştu.")
+      showToast("Liste alınamadı", "error")
     } finally {
       setLoading(false)
     }
@@ -290,7 +302,7 @@ export default function AdminCategoriesPage() {
   function queueUndo(snapshot: CategoryRow[], count: number) {
     if (undoTimer.current) window.clearTimeout(undoTimer.current)
     setPendingDelete({ snapshot, open: true, count })
-    showToast("success", "Silme işlemi uygulandı", "Backend hard delete. UNDO sadece UI içindir.", 5000)
+    showToast("Silme işlemi uygulandı. Backend hard delete. UNDO sadece UI içindir.", "success")
     undoTimer.current = window.setTimeout(() => setPendingDelete(null), 5000)
   }
 
@@ -299,7 +311,7 @@ export default function AdminCategoriesPage() {
     if (undoTimer.current) window.clearTimeout(undoTimer.current)
     setItems(pendingDelete.snapshot)
     setPendingDelete(null)
-    showToast("info", "UI geri alındı", "Backend tarafında silme geri alınamaz (hard delete).")
+    showToast("UI geri alındı. Backend tarafında silme geri alınamaz (hard delete).", "info")
   }
 
   async function toggleStatus(c: CategoryRow) {
@@ -316,11 +328,14 @@ export default function AdminCategoriesPage() {
         json: { status: nextStatus },
       })
 
-      showToast("success", "Durum güncellendi", nextStatus === "ACTIVE" ? "Kategori aktif" : "Kategori pasif")
+      showToast(
+        `Durum güncellendi. ${nextStatus === "ACTIVE" ? "Kategori aktif" : "Kategori pasif"}.`,
+        "success"
+      )
       fetchList()
     } catch (e: any) {
       setItems(snap)
-      showToast("error", "Durum güncellenemedi", e?.message || "Bir hata oluştu.")
+      showToast(`Durum güncellenemedi. ${e?.message || "Bir hata oluştu."}`, "error")
     }
   }
 
@@ -333,12 +348,12 @@ export default function AdminCategoriesPage() {
 
       await api(`/api/admin/categories/${encodeURIComponent(id)}`, { method: "DELETE" })
 
-      showToast("success", "Kategori silindi")
+      showToast("Kategori silindi", "success")
       queueUndo(snap, 1)
       fetchList()
     } catch (e: any) {
       setItems(snap)
-      showToast("error", "Silme başarısız", e?.message || "Bir hata oluştu.")
+      showToast(`Silme başarısız. ${e?.message || "Bir hata oluştu."}`, "error")
     }
   }
 
@@ -356,12 +371,12 @@ export default function AdminCategoriesPage() {
       }
 
       setSelected({})
-      showToast("success", "Kategoriler silindi", `${selectedIds.length} kayıt silindi.`)
+      showToast(`Kategoriler silindi. ${selectedIds.length} kayıt silindi.`, "success")
       queueUndo(snap, selectedIds.length)
       fetchList()
     } catch (e: any) {
       setItems(snap)
-      showToast("error", "Toplu silme başarısız", e?.message || "Bir hata oluştu.")
+      showToast(`Toplu silme başarısız. ${e?.message || "Bir hata oluştu."}`, "error")
     }
   }
 
@@ -397,7 +412,7 @@ export default function AdminCategoriesPage() {
           <button
             onClick={() => {
               fetchList()
-              showToast("success", "Yenilendi")
+              showToast("Yenilendi", "success")
             }}
             className="inline-flex items-center gap-2 rounded-2xl bg-white/80 border border-slate-200/80 px-4 py-2.5 text-sm font-semibold shadow-sm hover:bg-white transition"
           >

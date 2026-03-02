@@ -7,18 +7,21 @@ import clsx from "clsx"
 import { Plus, Trash2, Pencil, CheckCircle2, RefreshCcw, Undo2, FileText } from "lucide-react"
 
 /* ================== API ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
-function normalizeBase(raw: string) {
-  return (raw || "").trim().replace(/\/+$/, "")
+function normalizeBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // ✅ sondaki /api varsa kırp (çünkü path’ler zaten /api/... ile başlıyor)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
 
-function getToken() {
+const API_BASE = normalizeBase(RAW_BASE)
+
+function getToken(): string {
   if (typeof window === "undefined") return ""
   const candidates = ["sv_admin_token", "ADMIN_TOKEN", "token"]
+
   for (const key of candidates) {
     const raw = localStorage.getItem(key)
     if (!raw) continue
@@ -42,61 +45,45 @@ async function safeJson(res: Response) {
   }
 }
 
-async function apiGet(path: string) {
+async function apiRequest(path: string, init: RequestInit = {}) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
-  const res = await fetch(`${base}${path}`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...(init.headers as any),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers,
     cache: "no-store",
   })
+
   const data = await safeJson(res)
   if (!res.ok) {
-    const msg = (data && (data.message || data.error)) || `GET ${path} failed`
+    const msg = (data && (data.message || data.error)) || `${init.method || "GET"} ${path} failed`
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg))
   }
   return data
 }
 
+async function apiGet(path: string) {
+  return apiRequest(path, { method: "GET" })
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiPatch(path: string, body?: any) {
-  const token = getToken()
-  const base = normalizeBase(API_BASE)
-  const res = await fetch(`${base}${path}`, {
+  return apiRequest(path, {
     method: "PATCH",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-  const data = await safeJson(res)
-  if (!res.ok) {
-    const msg = (data && (data.message || data.error)) || `PATCH ${path} failed`
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg))
-  }
-  return data
 }
 
 async function apiDelete(path: string) {
-  const token = getToken()
-  const base = normalizeBase(API_BASE)
-  const res = await fetch(`${base}${path}`, {
-    method: "DELETE",
-    headers: {
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  })
-  const data = await safeJson(res)
-  if (!res.ok) {
-    const msg = (data && (data.message || data.error)) || `DELETE ${path} failed`
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg))
-  }
-  return data
+  return apiRequest(path, { method: "DELETE" })
 }
 
 /* ================== TYPES ================== */
@@ -107,6 +94,7 @@ type TermsItem = {
   isActive: boolean
   createdAt: string
   updatedAt: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   content?: any
 }
 
@@ -196,12 +184,14 @@ export default function AdminTermsListPage() {
   async function refresh(silent = false) {
     try {
       setLoading(true)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = (await apiGet("/api/admin/terms-of-use")) as TermsItem[] | any
       const arr = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
       setItems(arr)
-      if (!silent) showToast({ kind: "success", title: "Güncellendi" })
+      if (!silent) showToast({open: true, kind: "success", title: "Güncellendi" })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
-      showToast({ kind: "error", title: "Liste alınamadı", desc: e?.message || "Bir hata oluştu." })
+      showToast({open: true, kind: "error", title: "Liste alınamadı", desc: e?.message || "Bir hata oluştu." })
       setItems([])
     } finally {
       setLoading(false)
@@ -223,9 +213,10 @@ export default function AdminTermsListPage() {
     try {
       await apiPatch(`/api/admin/terms-of-use/${encodeURIComponent(id)}/activate`)
       setItems((prev) => prev.map((x) => ({ ...x, isActive: x.id === id })))
-      showToast({ kind: "success", title: "Aktif metin güncellendi", desc: "Web sayfası artık bu kaydı kullanacak." })
+      showToast({open: true, kind: "success", title: "Aktif metin güncellendi", desc: "Web sayfası artık bu kaydı kullanacak." })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
-      showToast({ kind: "error", title: "Aktifleştirilemedi", desc: e?.message || "Bir hata oluştu." })
+      showToast({open: true, kind: "error", title: "Aktifleştirilemedi", desc: e?.message || "Bir hata oluştu." })
     }
   }
 
@@ -244,10 +235,11 @@ export default function AdminTermsListPage() {
       try {
         pendingDeleteRef.current = null
         await apiDelete(`/api/admin/terms-of-use/${encodeURIComponent(id)}`)
-        showToast({ kind: "success", title: "Silindi", desc: "Kayıt kalıcı olarak silindi." })
+        showToast({open: true, kind: "success", title: "Silindi", desc: "Kayıt kalıcı olarak silindi." })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (e: any) {
         setItems((prev) => [target, ...prev])
-        showToast({ kind: "error", title: "Silinemedi", desc: e?.message || "Bir hata oluştu." })
+        showToast({open: true, kind: "error", title: "Silinemedi", desc: e?.message || "Bir hata oluştu." })
       }
     }, 5000)
 
@@ -255,6 +247,7 @@ export default function AdminTermsListPage() {
 
     showToast(
       {
+        open: true,
         kind: "success",
         title: "Silindi (geri alınabilir)",
         desc: "5 saniye içinde geri alabilirsin.",
@@ -265,7 +258,7 @@ export default function AdminTermsListPage() {
           const restore = pendingDeleteRef.current.item
           pendingDeleteRef.current = null
           setItems((prev) => [restore, ...prev])
-          showToast({ kind: "success", title: "Geri alındı", desc: "Kayıt geri getirildi." })
+          showToast({open: true, kind: "success", title: "Geri alındı", desc: "Kayıt geri getirildi." })
         },
       },
       5200

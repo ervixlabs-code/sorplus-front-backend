@@ -18,8 +18,15 @@ import {
 } from "lucide-react"
 import { useToast } from "@/components/admin/Toast"
 
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE?.trim() || "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
+
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 type ApiError = Error & { status?: number; data?: any }
 
@@ -205,13 +212,16 @@ export default function AdminUserDetailPage() {
       setUser((p) => (p ? { ...p, isActive: next } : p))
 
       showToast(
-        "success",
-        next ? "Kullanıcı aktif edildi" : "Kullanıcı engellendi",
-        next ? "Bu kullanıcı tekrar giriş yapabilir." : "Bu kullanıcı artık pasif/banlı."
+        `${next ? "Kullanıcı aktif edildi" : "Kullanıcı engellendi"}. ${
+          next
+            ? "Bu kullanıcı tekrar giriş yapabilir."
+            : "Bu kullanıcı artık pasif/banlı."
+        }`,
+        "success"
       )
     } catch (e: any) {
       const msg = e?.message || "İşlem başarısız."
-      showToast("error", "İşlem başarısız", msg)
+      showToast(`İşlem başarısız. ${msg}`, "error")
       setError(msg)
     } finally {
       setLoading(null)

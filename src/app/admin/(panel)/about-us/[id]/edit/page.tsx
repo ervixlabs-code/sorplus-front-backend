@@ -25,16 +25,17 @@ import {
   Lock,
 } from "lucide-react"
 
-/* ====================== API ====================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+/* ================== API ================== */
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
 function normalizeApiBase(raw?: string) {
-  const base = (raw || "").trim() || "http://localhost:3002"
-  return base.replace(/\/+$/, "")
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base "…/api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 function getToken(): string {
   if (typeof window === "undefined") return ""
@@ -91,6 +92,7 @@ async function apiGet(path: string) {
   return data
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiPatch(path: string, body: any) {
   const token = getToken()
   const base = normalizeApiBase(API_BASE)
@@ -305,6 +307,7 @@ export default function AdminAboutUsEditPage() {
         setContent(nextContent)
 
         initialRef.current = { title: nextTitle, content: nextContent }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (e: any) {
         if (!mounted) return
         showToast("error", "Yüklenemedi", e?.message || "Kayıt okunamadı.")
@@ -366,6 +369,7 @@ export default function AdminAboutUsEditPage() {
       showToast("success", "Kaydedildi", "Güncelleme başarılı.")
       // istersen updatedAt vb. gösterebilirsin: console.log(updated)
       void updated
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       showToast("error", "Kaydedilemedi", e?.message || "Bir hata oluştu.")
     } finally {

@@ -1,14 +1,35 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
-import React, { useEffect, useMemo, useRef, useState } from "react"
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import clsx from "clsx"
-import { ChevronLeft, ChevronRight, Plus, RefreshCcw, Search, SlidersHorizontal, Trash2, Pencil, Eye, Tags } from "lucide-react"
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  RefreshCcw,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  Pencil,
+  Eye,
+  Tags,
+} from "lucide-react"
 
 /** ================== CONFIG ================== */
-const API_BASE = (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE?.trim() || "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
+
+
+function normalizeBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // ✅ sondaki /api varsa kırp (endpointler zaten /api/... başlıyor)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+
+const API_BASE = normalizeBase(RAW_BASE)
 
 type ApiError = Error & { status?: number; data?: any }
 
@@ -22,23 +43,30 @@ async function safeJson(res: Response) {
 }
 
 function getToken(): string | null {
-  try {
-    return (
-      localStorage.getItem("sv_admin_token") ||
-      localStorage.getItem("ADMIN_TOKEN") ||
-      localStorage.getItem("token") ||
-      null
-    )
-  } catch {
-    return null
+  if (typeof window === "undefined") return null
+  const keys = ["sv_admin_token", "ADMIN_TOKEN", "token"]
+
+  for (const key of keys) {
+    const raw = localStorage.getItem(key)
+    if (!raw) continue
+
+    // json olabilir: { token }, { accessToken } veya direkt string
+    try {
+      const obj = JSON.parse(raw)
+      const t = obj?.token || obj?.accessToken || obj
+      if (typeof t === "string" && t.length > 10) return t
+    } catch {
+      if (raw.length > 10) return raw
+    }
   }
+  return null
 }
 
 async function api<T>(path: string, init?: RequestInit & { json?: any }): Promise<T> {
   const token = getToken()
-
   const headers: Record<string, string> = {
     ...(init?.headers as any),
+    Accept: "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
 
@@ -58,7 +86,9 @@ async function api<T>(path: string, init?: RequestInit & { json?: any }): Promis
   const data = await safeJson(res)
 
   if (!res.ok) {
-    const msg = (data && typeof data === "object" && (data.message || data.error)) || `HTTP ${res.status}`
+    const msg =
+      (data && typeof data === "object" && (data.message || data.error)) ||
+      `HTTP ${res.status}`
     const err: ApiError = new Error(Array.isArray(msg) ? msg.join(", ") : String(msg))
     err.status = res.status
     err.data = data
@@ -166,8 +196,8 @@ function Toast({
   )
 }
 
-/** ================== Page ================== */
-export default function AdminFaqCategoriesPage() {
+/** ================== INNER (useSearchParams burada) ================== */
+function AdminFaqCategoriesInner() {
   const router = useRouter()
   const pathname = usePathname()
   const sp = useSearchParams()
@@ -224,7 +254,9 @@ export default function AdminFaqCategoriesPage() {
       let data: ApiListResp | null = null
 
       try {
-        data = await api<ApiListResp>(`/api/admin/faq-categories?${params.toString()}`, { method: "GET" })
+        data = await api<ApiListResp>(`/api/admin/faq-categories?${params.toString()}`, {
+          method: "GET",
+        })
       } catch (e: any) {
         // param desteklemiyorsa ikinci deneme: querysiz çek, client-side filtre/paginate
         data = await api<ApiListResp>(`/api/admin/faq-categories`, { method: "GET" })
@@ -255,11 +287,10 @@ export default function AdminFaqCategoriesPage() {
 
       // Eğer backend total/skip/take sağladıysa, skip/take zaten server-side olabilir
       // Ama querysiz fallback yaptığımızda kendimiz paginate edeceğiz:
-      const isServerPaged = Array.isArray(data) ? false : (data as any)?.skip !== undefined || (data as any)?.take !== undefined
-      const finalItems = isServerPaged
-        ? mappedAll
-        : filteredAll.slice(skip, skip + take)
+      const isServerPaged =
+        Array.isArray(data) ? false : (data as any)?.skip !== undefined || (data as any)?.take !== undefined
 
+      const finalItems = isServerPaged ? mappedAll : filteredAll.slice(skip, skip + take)
       const finalTotal = isServerPaged ? rawTotal : filteredAll.length
 
       setItems(finalItems)
@@ -299,7 +330,11 @@ export default function AdminFaqCategoriesPage() {
 
   // Undo delete (UI-only)
   const undoTimer = useRef<number | null>(null)
-  const [pendingDelete, setPendingDelete] = useState<{ snapshot: FaqCategoryRow[]; open: boolean; count: number } | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{
+    snapshot: FaqCategoryRow[]
+    open: boolean
+    count: number
+  } | null>(null)
 
   function queueUndo(snapshot: FaqCategoryRow[], count: number) {
     if (undoTimer.current) window.clearTimeout(undoTimer.current)
@@ -330,7 +365,6 @@ export default function AdminFaqCategoriesPage() {
     } catch (e: any) {
       setItems(snap)
 
-      // backend "kullanımda" diye 400/409 dönerse burada yakalayıp mesajı güzel gösterelim
       const msg = e?.message || "Bir hata oluştu."
       const statusCode = e?.status
 
@@ -367,7 +401,8 @@ export default function AdminFaqCategoriesPage() {
   if (tokenMissing) {
     return (
       <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-4 text-sm text-amber-900">
-        Admin token bulunamadı. Login sonrası token’ı localStorage’a <b>sv_admin_token</b> (veya ADMIN_TOKEN/token) ile kaydetmelisin.
+        Admin token bulunamadı. Login sonrası token’ı localStorage’a <b>sv_admin_token</b> (veya ADMIN_TOKEN/token) ile
+        kaydetmelisin.
       </div>
     )
   }
@@ -446,9 +481,7 @@ export default function AdminFaqCategoriesPage() {
               <SlidersHorizontal size={16} />
               Not:
             </div>
-            <div className="text-xs text-slate-600">
-              Silme kuralı (kullanımda olan kategori) backend tarafından kontrol edilir.
-            </div>
+            <div className="text-xs text-slate-600">Silme kuralı (kullanımda olan kategori) backend tarafından kontrol edilir.</div>
 
             {selectedIds.length > 0 ? (
               <div className="ml-auto flex items-center gap-2">
@@ -479,7 +512,9 @@ export default function AdminFaqCategoriesPage() {
       <div className="rounded-2xl border border-slate-200/70 bg-white/80 backdrop-blur-xl shadow-[0_14px_50px_rgba(15,23,42,0.08)] overflow-hidden">
         <div className="px-5 py-4 flex items-center justify-between">
           <div className="text-sm font-semibold">Kayıtlar</div>
-          <div className="text-xs text-slate-500">{loading ? "Yükleniyor…" : `Sayfa ${safePage} / ${totalPages}`}</div>
+          <div className="text-xs text-slate-500">
+            {loading ? "Yükleniyor…" : `Sayfa ${safePage} / ${totalPages}`}
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -626,5 +661,14 @@ export default function AdminFaqCategoriesPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+/** ================== PAGE (Suspense fix) ================== */
+export default function AdminFaqCategoriesPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-600">Yükleniyor…</div>}>
+      <AdminFaqCategoriesInner />
+    </Suspense>
   )
 }

@@ -7,7 +7,20 @@ import clsx from "clsx"
 import { ArrowLeft, Check, Sparkles, Trash2 } from "lucide-react"
 
 /** ================== CONFIG ================== */
-const API_BASE = (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE?.trim() || "http://localhost:3002"
+const RAW_BASE = (
+  (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE ||
+  (process.env as any)?.NEXT_PUBLIC_API_BASE ||
+  "https://sorplus-admin-backend.onrender.com"
+).trim()
+
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base ".../api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 type ApiError = Error & { status?: number; data?: any }
 
@@ -38,6 +51,7 @@ async function api<T>(path: string, init?: RequestInit & { json?: any }): Promis
 
   const headers: Record<string, string> = {
     ...(init?.headers as any),
+    Accept: "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
 
@@ -57,7 +71,10 @@ async function api<T>(path: string, init?: RequestInit & { json?: any }): Promis
   const data = await safeJson(res)
 
   if (!res.ok) {
-    const msg = (data && typeof data === "object" && (data.message || data.error)) || `HTTP ${res.status}`
+    const msg =
+      (data && typeof data === "object" && (data.message || data.error)) ||
+      `HTTP ${res.status}`
+
     const err: ApiError = new Error(Array.isArray(msg) ? msg.join(", ") : String(msg))
     err.status = res.status
     err.data = data

@@ -20,7 +20,15 @@ import {
 } from "lucide-react"
 import { useToast } from "@/components/admin/Toast"
 
-const API_BASE = (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE?.trim() || "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
+
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 type ApiError = Error & { status?: number; data?: any }
 
@@ -206,7 +214,7 @@ export default function AdminUserEditPage() {
   async function onSave() {
     if (!user) return
     if (!canSave) {
-      showToast("info", "Değişiklik yok", "Kaydetmek için önce role/aktiflik değiştir.")
+      showToast("Değişiklik yok. Kaydetmek için önce rol/aktiflik değiştir.", "info")
       return
     }
 
@@ -230,7 +238,7 @@ export default function AdminUserEditPage() {
         })
       }
 
-      showToast("success", "Kaydedildi", "Değişiklikler başarıyla uygulandı.")
+      showToast("Kaydedildi. Değişiklikler başarıyla uygulandı.", "success")
       setOriginalRole(role)
       setOriginalActive(isActive)
 
@@ -239,7 +247,7 @@ export default function AdminUserEditPage() {
     } catch (e: any) {
       const msg = e?.message || "Kaydetme başarısız."
       setError(msg)
-      showToast("error", "Kaydedilemedi", msg)
+      showToast(`Kaydedilemedi. ${msg}`, "error")
     } finally {
       setLoading(null)
     }

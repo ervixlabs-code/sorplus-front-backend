@@ -8,14 +8,16 @@ import clsx from "clsx"
 import { Plus, Trash2, Pencil, CheckCircle2, RefreshCcw, Undo2 } from "lucide-react"
 
 /* ================== API ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
-function normalizeBase(raw: string) {
-  return (raw || "").trim().replace(/\/+$/, "")
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base "…/api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 function getToken() {
   if (typeof window === "undefined") return ""
@@ -45,7 +47,7 @@ async function safeJson(res: Response) {
 
 async function apiGet(path: string) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "GET",
     headers: {
@@ -62,9 +64,10 @@ async function apiGet(path: string) {
   return data
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiPatch(path: string, body?: any) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "PATCH",
     headers: {
@@ -84,7 +87,7 @@ async function apiPatch(path: string, body?: any) {
 
 async function apiDelete(path: string) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "DELETE",
     headers: {
@@ -111,6 +114,7 @@ type KvkkSection = {
   content: {
     summary?: string
     body?: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [k: string]: any
   }
 }
@@ -203,12 +207,14 @@ export default function AdminKvkkListPage() {
   async function refresh(silent = false) {
     try {
       setLoading(true)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = (await apiGet("/api/admin/kvkk")) as KvkkSection[] | any
       const arr = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
       setItems(arr)
-      if (!silent) showToast({ kind: "success", title: "Güncellendi" })
+      if (!silent) showToast({open: true, kind: "success", title: "Güncellendi" })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
-      showToast({ kind: "error", title: "Liste alınamadı", desc: e?.message || "Bir hata oluştu." })
+      showToast({ open: true, kind: "error", title: "Liste alınamadı", desc: e?.message || "Bir hata oluştu." })
       setItems([])
     } finally {
       setLoading(false)
@@ -232,12 +238,14 @@ export default function AdminKvkkListPage() {
       await apiPatch(`/api/admin/kvkk/${encodeURIComponent(id)}/activate`)
       setItems((prev) => prev.map((x) => ({ ...x, isActive: x.id === id })))
       showToast({
+        open: true,
         kind: "success",
         title: "Aktif KVKK içeriği güncellendi",
         desc: "KVKK sayfası artık bu kaydı kullanacak.",
       })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
-      showToast({ kind: "error", title: "Aktifleştirilemedi", desc: e?.message || "Bir hata oluştu." })
+      showToast({open: true, kind: "error", title: "Aktifleştirilemedi", desc: e?.message || "Bir hata oluştu." })
     }
   }
 
@@ -256,10 +264,11 @@ export default function AdminKvkkListPage() {
       try {
         pendingDeleteRef.current = null
         await apiDelete(`/api/admin/kvkk/${encodeURIComponent(id)}`)
-        showToast({ kind: "success", title: "Silindi", desc: "Kayıt kalıcı olarak silindi." })
+        showToast({open: true, kind: "success", title: "Silindi", desc: "Kayıt kalıcı olarak silindi." })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (e: any) {
         setItems((prev) => [target, ...prev])
-        showToast({ kind: "error", title: "Silinemedi", desc: e?.message || "Bir hata oluştu." })
+        showToast({ open: true, kind: "error", title: "Silinemedi", desc: e?.message || "Bir hata oluştu." })
       }
     }, 5000)
 
@@ -267,6 +276,7 @@ export default function AdminKvkkListPage() {
 
     showToast(
       {
+        open: true,
         kind: "success",
         title: "Silindi (geri alınabilir)",
         desc: "5 saniye içinde geri alabilirsin.",
@@ -277,7 +287,7 @@ export default function AdminKvkkListPage() {
           const restore = pendingDeleteRef.current.item
           pendingDeleteRef.current = null
           setItems((prev) => [restore, ...prev])
-          showToast({ kind: "success", title: "Geri alındı", desc: "Kayıt geri getirildi." })
+          showToast({open: true, kind: "success", title: "Geri alındı", desc: "Kayıt geri getirildi." })
         },
       },
       5200

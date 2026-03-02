@@ -20,14 +20,16 @@ import {
 } from "lucide-react"
 
 /* ================== API ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
-function normalizeBase(raw: string) {
-  return (raw || "").trim().replace(/\/+$/, "")
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base "…/api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 function getToken() {
   if (typeof window === "undefined") return ""
@@ -57,7 +59,7 @@ async function safeJson(res: Response) {
 
 async function apiGet(path: string) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "GET",
     headers: {
@@ -68,15 +70,17 @@ async function apiGet(path: string) {
   })
   const data = await safeJson(res)
   if (!res.ok) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const msg = (data && ((data as any).message || (data as any).error)) || `GET ${path} failed`
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg))
   }
   return data
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiPatch(path: string, body?: any) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "PATCH",
     headers: {
@@ -88,6 +92,7 @@ async function apiPatch(path: string, body?: any) {
   })
   const data = await safeJson(res)
   if (!res.ok) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const msg = (data && ((data as any).message || (data as any).error)) || `PATCH ${path} failed`
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg))
   }
@@ -96,7 +101,7 @@ async function apiPatch(path: string, body?: any) {
 
 async function apiDelete(path: string) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "DELETE",
     headers: {
@@ -106,6 +111,7 @@ async function apiDelete(path: string) {
   })
   const data = await safeJson(res)
   if (!res.ok) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const msg = (data && ((data as any).message || (data as any).error)) || `DELETE ${path} failed`
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg))
   }
@@ -236,6 +242,7 @@ function stableSnapshot(it: Partial<SecuritySection> | null) {
     desc: (it.desc || "").trim(),
     bullets: Array.isArray(it.bullets) ? compactArray(it.bullets) : [],
     level: (it.level || "BILGI") as SecuritySectionLevel,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     sortOrder: Number.isFinite(it.sortOrder as any) ? Number(it.sortOrder) : 0,
     isActive: !!it.isActive,
   }
@@ -245,6 +252,7 @@ function stableSnapshot(it: Partial<SecuritySection> | null) {
 export default function AdminSecurityEditPage() {
   const router = useRouter()
   const params = useParams()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const id = String((params as any)?.id || "")
 
   const [loading, setLoading] = useState(true)
@@ -311,6 +319,7 @@ export default function AdminSecurityEditPage() {
       setTitle(it.title || "")
       setDesc(it.desc || "")
       setLevel((it.level || "BILGI") as SecuritySectionLevel)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setSortOrder(Number.isFinite(it.sortOrder as any) ? Number(it.sortOrder) : 0)
       setIsActive(!!it.isActive)
       setBulletsText((Array.isArray(it.bullets) ? it.bullets : []).join("\n"))
@@ -318,9 +327,10 @@ export default function AdminSecurityEditPage() {
       const snap = stableSnapshot(it)
       setOriginalSnap(snap)
 
-      if (!silent) showToast({ kind: "success", title: "Yüklendi" })
+      if (!silent) showToast({open: true, kind: "success", title: "Yüklendi" })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
-      showToast({ kind: "error", title: "Kayıt yüklenemedi", desc: e?.message || "Bir hata oluştu." }, 4800)
+      showToast({ open: true, kind: "error", title: "Kayıt yüklenemedi", desc: e?.message || "Bir hata oluştu." }, 4800)
       setItem(null)
     } finally {
       setLoading(false)
@@ -335,6 +345,7 @@ export default function AdminSecurityEditPage() {
   async function onSave() {
     if (!id) return
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const payload: any = {}
     // "smart update": sadece değişen alanları gönder
     const original = item
@@ -344,6 +355,7 @@ export default function AdminSecurityEditPage() {
           desc: (item.desc || "").trim(),
           bullets: compactArray(Array.isArray(item.bullets) ? item.bullets : []),
           level: (item.level || "BILGI") as SecuritySectionLevel,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           sortOrder: Number.isFinite(item.sortOrder as any) ? Number(item.sortOrder) : 0,
           isActive: !!item.isActive,
         }
@@ -360,7 +372,7 @@ export default function AdminSecurityEditPage() {
     }
 
     if (!now.category || !now.title || !now.desc) {
-      showToast({ kind: "error", title: "Eksik bilgi", desc: "Kategori, Başlık ve Açıklama zorunlu." })
+      showToast({open: true, kind: "error", title: "Eksik bilgi", desc: "Kategori, Başlık ve Açıklama zorunlu." })
       return
     }
 
@@ -381,23 +393,26 @@ export default function AdminSecurityEditPage() {
     }
 
     if (Object.keys(payload).length === 0) {
-      showToast({ kind: "success", title: "Değişiklik yok", desc: "Kaydedilecek bir şey bulunamadı." })
+      showToast({open: true, kind: "success", title: "Değişiklik yok", desc: "Kaydedilecek bir şey bulunamadı." })
       return
     }
 
     try {
       setSaving(true)
       const updated = await apiPatch(`/api/admin/security/${encodeURIComponent(id)}`, payload)
-      showToast({ kind: "success", title: "Kaydedildi", desc: "Değişiklikler uygulandı." }, 2200)
+      showToast({open: true, kind: "success", title: "Kaydedildi", desc: "Değişiklikler uygulandı." }, 2200)
       // re-load for fresh timestamps and snapshot
       setItem(updated as SecuritySection)
       const snap = stableSnapshot({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ...(updated as any),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         bullets: Array.isArray((updated as any)?.bullets) ? (updated as any).bullets : bulletsPreview,
       })
       setOriginalSnap(snap)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
-      showToast({ kind: "error", title: "Kaydedilemedi", desc: e?.message || "Bir hata oluştu." }, 4800)
+      showToast({open: true, kind: "error", title: "Kaydedilemedi", desc: e?.message || "Bir hata oluştu." }, 4800)
     } finally {
       setSaving(false)
     }
@@ -409,7 +424,7 @@ export default function AdminSecurityEditPage() {
     setIsActive(next) // optimistic
     try {
       await apiPatch(`/api/admin/security/${encodeURIComponent(id)}/status`, { isActive: next })
-      showToast({ kind: "success", title: next ? "Aktif edildi" : "Pasife alındı" }, 2200)
+      showToast({open: true, kind: "success", title: next ? "Aktif edildi" : "Pasife alındı" }, 2200)
       // update original snapshot (status changed is also a change; we accept it as saved)
       const nextSnap = stableSnapshot({
         category,
@@ -422,9 +437,10 @@ export default function AdminSecurityEditPage() {
       })
       setOriginalSnap(nextSnap)
       setItem((prev) => (prev ? { ...prev, isActive: next } : prev))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       setIsActive(!next)
-      showToast({ kind: "error", title: "Durum güncellenemedi", desc: e?.message || "Bir hata oluştu." }, 4800)
+      showToast({open: true, kind: "error", title: "Durum güncellenemedi", desc: e?.message || "Bir hata oluştu." }, 4800)
     }
   }
 
@@ -438,6 +454,7 @@ export default function AdminSecurityEditPage() {
     const target = item
     showToast(
       {
+        open: true,
         kind: "success",
         title: "Silme kuyruğa alındı",
         desc: "5 saniye içinde geri alabilirsin.",
@@ -446,7 +463,7 @@ export default function AdminSecurityEditPage() {
           if (!pendingDeleteRef.current) return
           window.clearTimeout(pendingDeleteRef.current.timer)
           pendingDeleteRef.current = null
-          showToast({ kind: "success", title: "İptal edildi", desc: "Silme işlemi iptal." })
+          showToast({open: true, kind: "success", title: "İptal edildi", desc: "Silme işlemi iptal." })
         },
       },
       5200
@@ -456,10 +473,11 @@ export default function AdminSecurityEditPage() {
       try {
         pendingDeleteRef.current = null
         await apiDelete(`/api/admin/security/${encodeURIComponent(id)}`)
-        showToast({ kind: "success", title: "Silindi", desc: "Kayıt kalıcı olarak silindi." }, 1800)
+        showToast({open: true, kind: "success", title: "Silindi", desc: "Kayıt kalıcı olarak silindi." }, 1800)
         router.replace("/admin/security")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (e: any) {
-        showToast({ kind: "error", title: "Silinemedi", desc: e?.message || "Bir hata oluştu." }, 4800)
+        showToast({open: true, kind: "error", title: "Silinemedi", desc: e?.message || "Bir hata oluştu." }, 4800)
       }
     }, 5000)
 

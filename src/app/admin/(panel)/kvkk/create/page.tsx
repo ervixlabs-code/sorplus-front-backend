@@ -27,14 +27,16 @@ import {
 } from "lucide-react"
 
 /* ================== API ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
-function normalizeBase(raw: string) {
-  return (raw || "").trim().replace(/\/+$/, "")
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base "…/api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 function getToken() {
   if (typeof window === "undefined") return ""
@@ -62,9 +64,10 @@ async function safeJson(res: Response) {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiPost(path: string, body?: any) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "POST",
     headers: {
@@ -82,9 +85,10 @@ async function apiPost(path: string, body?: any) {
   return data
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiPatch(path: string, body?: any) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "PATCH",
     headers: {
@@ -400,7 +404,7 @@ export default function AdminKvkkCreatePage() {
   async function onSave() {
     const err = validate()
     if (err) {
-      showToast({ kind: "error", title: "Eksik bilgi", desc: err })
+      showToast({open: true, kind: "error", title: "Eksik bilgi", desc: err })
       return
     }
 
@@ -438,10 +442,11 @@ export default function AdminKvkkCreatePage() {
         }
       }
 
-      showToast({ kind: "success", title: "Kaydedildi", desc: "KVKK içeriği oluşturuldu." })
+      showToast({open: true, kind: "success", title: "Kaydedildi", desc: "KVKK içeriği oluşturuldu." })
       router.push("/admin/kvkk")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
-      showToast({ kind: "error", title: "Kaydedilemedi", desc: e?.message || "Bir hata oluştu." })
+      showToast({ open: true, kind: "error", title: "Kaydedilemedi", desc: e?.message || "Bir hata oluştu." })
     } finally {
       setSaving(false)
     }
@@ -473,7 +478,7 @@ export default function AdminKvkkCreatePage() {
         iconKey: "shield",
       },
     ])
-    showToast({ kind: "success", title: "Sıfırlandı" })
+    showToast({open: true, kind: "success", title: "Sıfırlandı" })
   }
 
   return (

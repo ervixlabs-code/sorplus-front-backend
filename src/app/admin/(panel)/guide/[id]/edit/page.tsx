@@ -6,15 +6,17 @@ import { Save, RefreshCcw, Plus, Trash2, ArrowLeft, Sparkles } from "lucide-reac
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 
-/* ====================== API ====================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+/* ================== API ================== */
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
-function normalizeBase(raw: string) {
-  return (raw || "").trim().replace(/\/+$/, "")
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base "…/api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 function getToken() {
   if (typeof window === "undefined") return ""
@@ -44,7 +46,7 @@ async function safeJson(res: Response) {
 
 async function apiGet(path: string) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "GET",
     headers: {
@@ -61,9 +63,10 @@ async function apiGet(path: string) {
   return data
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiPatch(path: string, body: any) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "PATCH",
     headers: {
@@ -129,6 +132,7 @@ type GuideContent = {
 type GuideApiItem = {
   id: string
   title: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   content: any
   isActive: boolean
   createdAt: string
@@ -269,6 +273,7 @@ export default function AdminGuideEditPage() {
         if (!mounted) return
         setTitle(data?.title || "Rehber İçeriği")
         setContent((data?.content || defaultContent()) as GuideContent)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (e: any) {
         if (!mounted) return
         showToast("error", "Yüklenemedi", e?.message || "Kayıt okunamadı.")
@@ -303,6 +308,7 @@ export default function AdminGuideEditPage() {
         content,
       })
       showToast("success", "Kaydedildi", "Rehber içeriği güncellendi.")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       showToast("error", "Kaydedilemedi", e?.message || "Bir hata oluştu.")
     } finally {

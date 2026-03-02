@@ -23,8 +23,15 @@ import {
 import StatusBadge, { ComplaintStatus as StatusBadgeStatus } from "@/components/admin/StatusBadge"
 
 /* ================== CONFIG ================== */
-const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3002").replace(/\/+$/, "")
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
+
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 const TOKEN_KEY = "sv_admin_token"
 

@@ -21,8 +21,15 @@ import {
 } from "lucide-react"
 
 /* ================== CONFIG ================== */
-const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3002").replace(/\/+$/, "")
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
+
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 /** Eğer login’de token saklıyorsan ve create’e admin token eklemek istersen */
 const TOKEN_KEY = "sv_admin_token"
@@ -343,24 +350,39 @@ export default function AdminComplaintCreatePage() {
   }
 
   async function fetchCategories() {
-    setCatLoading(true)
-    try {
-      const res = await fetch(`${API_BASE}/api/categories`, { cache: "no-store" })
-      const data = await safeJson(res)
-      if (!res.ok) {
-        const msg = data?.message || "Kategoriler alınamadı."
-        throw new Error(String(msg))
-      }
-      const list = Array.isArray(data) ? data : (data?.items || [])
-      setCategories(list)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
-      setCategories([])
-      setNotice({ kind: "error", text: e?.message || "Kategoriler alınamadı." })
-    } finally {
-      setCatLoading(false)
+  setCatLoading(true)
+  try {
+    const token = getToken()
+
+    // 1) Önce admin endpoint'i dene (panel için daha doğru)
+    let res = await fetch(`${API_BASE}/api/admin/categories`, {
+      cache: "no-store",
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+
+    // 401/403/404 ise public endpoint'e düş (backend'te public varsa)
+    if (!res.ok && (res.status === 401 || res.status === 403 || res.status === 404)) {
+      res = await fetch(`${API_BASE}/api/categories`, { cache: "no-store" })
     }
+
+    const data = await safeJson(res)
+    if (!res.ok) {
+      const msg = data?.message || "Kategoriler alınamadı."
+      throw new Error(String(msg))
+    }
+
+    const list = Array.isArray(data) ? data : (data?.items || [])
+    setCategories(list)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (e: any) {
+    setCategories([])
+    setNotice({ kind: "error", text: e?.message || "Kategoriler alınamadı." })
+  } finally {
+    setCatLoading(false)
   }
+}
 
   useEffect(() => {
     fetchCategories()
@@ -389,10 +411,7 @@ export default function AdminComplaintCreatePage() {
         method: "POST",
         body: fd,
         // Public endpoint, ama istersen admin token ekleyebilirsin:
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       })
 
       const data = await safeJson(res)

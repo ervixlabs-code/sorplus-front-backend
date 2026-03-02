@@ -7,8 +7,18 @@ import clsx from "clsx"
 import { ArrowLeft, Save, Loader2, Tags, Trash2 } from "lucide-react"
 
 /** ================== CONFIG ================== */
-const API_BASE = (process.env as any)?.NEXT_PUBLIC_ADMIN_API_BASE?.trim() || "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
+function normalizeBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // ✅ sondaki /api varsa kırp (endpointler zaten /api/... başlıyor)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
+}
+
+const API_BASE = normalizeBase(RAW_BASE)
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ApiError = Error & { status?: number; data?: any }
 
 async function safeJson(res: Response) {
@@ -21,29 +31,40 @@ async function safeJson(res: Response) {
 }
 
 function getToken(): string | null {
-  try {
-    return (
-      localStorage.getItem("sv_admin_token") ||
-      localStorage.getItem("ADMIN_TOKEN") ||
-      localStorage.getItem("token") ||
-      null
-    )
-  } catch {
-    return null
+  if (typeof window === "undefined") return null
+  const keys = ["sv_admin_token", "ADMIN_TOKEN", "token"]
+
+  for (const key of keys) {
+    const raw = localStorage.getItem(key)
+    if (!raw) continue
+
+    // json olabilir: { token }, { accessToken } veya direkt string
+    try {
+      const obj = JSON.parse(raw)
+      const t = obj?.token || obj?.accessToken || obj
+      if (typeof t === "string" && t.length > 10) return t
+    } catch {
+      if (raw.length > 10) return raw
+    }
   }
+  return null
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function api<T>(path: string, init?: RequestInit & { json?: any }): Promise<T> {
   const token = getToken()
-
   const headers: Record<string, string> = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...(init?.headers as any),
+    Accept: "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
 
   let body = init?.body
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if ((init as any)?.json !== undefined) {
     headers["Content-Type"] = "application/json"
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     body = JSON.stringify((init as any).json)
   }
 
@@ -57,7 +78,9 @@ async function api<T>(path: string, init?: RequestInit & { json?: any }): Promis
   const data = await safeJson(res)
 
   if (!res.ok) {
-    const msg = (data && typeof data === "object" && (data.message || data.error)) || `HTTP ${res.status}`
+    const msg =
+      (data && typeof data === "object" && (data.message || data.error)) ||
+      `HTTP ${res.status}`
     const err: ApiError = new Error(Array.isArray(msg) ? msg.join(", ") : String(msg))
     err.status = res.status
     err.data = data
@@ -166,6 +189,7 @@ export default function AdminFaqCategoryEditPage() {
 
         setInitial(found)
         setName(found.name ?? "")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         const detail =
           err?.data?.message && Array.isArray(err.data.message) ? err.data.message.join(", ") : err?.data?.message
@@ -202,6 +226,7 @@ export default function AdminFaqCategoryEditPage() {
 
       showToast("success", "Güncellendi", "Kategori güncellendi.")
       router.push("/admin/sss-kategoriler")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const detail =
         err?.data?.message && Array.isArray(err.data.message) ? err.data.message.join(", ") : err?.data?.message
@@ -228,6 +253,7 @@ export default function AdminFaqCategoryEditPage() {
           await api(`/api/admin/faq-categories/${encodeURIComponent(id)}`, { method: "DELETE" })
           showToast("success", "Silindi", "Kategori silindi.")
           router.push("/admin/sss-kategoriler")
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
           const detail =
             err?.data?.message && Array.isArray(err.data.message) ? err.data.message.join(", ") : err?.data?.message

@@ -24,14 +24,16 @@ import {
 } from "lucide-react"
 
 /* ================== API ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
-function normalizeBase(raw: string) {
-  return (raw || "").trim().replace(/\/+$/, "")
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base "…/api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 function getToken() {
   if (typeof window === "undefined") return ""
@@ -61,7 +63,7 @@ async function safeJson(res: Response) {
 
 async function apiGet(path: string) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "GET",
     headers: { Accept: "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -72,9 +74,10 @@ async function apiGet(path: string) {
   return data
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiPatch(path: string, body?: any) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "PATCH",
     headers: {
@@ -127,6 +130,7 @@ const CATEGORIES: RuleCategory[] = [
 
 const LEVELS: RuleLevel[] = ["Zorunlu", "Öneri", "Bilgi"]
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ICONS: Array<{ key: RuleIconKey; label: string; Icon: any }> = [
   { key: "sparkles", label: "Sparkles", Icon: Sparkles },
   { key: "shield", label: "Shield", Icon: Shield },
@@ -157,6 +161,7 @@ type RulesDoc = {
   slug?: string | null
   isActive: boolean
   content: { rules?: RuleItem[]; updatedLabel?: string }
+  updatedAt: string
 }
 
 function uid(prefix = "r") {
@@ -205,6 +210,7 @@ export default function AdminRulesEditPage() {
     try {
       setLoading(true)
       const data = await apiGet(`/api/admin/rules/${encodeURIComponent(id)}`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const item = (data as any)?.item || data
       const d: RulesDoc = item
 
@@ -212,7 +218,9 @@ export default function AdminRulesEditPage() {
       setTitle(d.title || "")
       setSlug(d.slug || "")
       setUpdatedLabel(d.content?.updatedLabel || "")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setRules(Array.isArray(d.content?.rules) ? (d.content.rules as any) : [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       alert(e?.message || "Yüklenemedi")
       router.push("/admin/rules")
@@ -264,9 +272,11 @@ export default function AdminRulesEditPage() {
         },
       }
       const data = await apiPatch(`/api/admin/rules/${encodeURIComponent(id)}`, payload)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updated = (data as any)?.item || data
       setDoc(updated)
       alert("Kaydedildi ✅")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       alert(e?.message || "Kaydedilemedi")
     } finally {
@@ -279,9 +289,11 @@ export default function AdminRulesEditPage() {
     setActivating(true)
     try {
       const data = await apiPatch(`/api/admin/rules/${encodeURIComponent(id)}/activate`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updated = (data as any)?.item || data
       setDoc(updated)
       alert("Aktif yapıldı ✅")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       alert(e?.message || "Aktifleştirilemedi")
     } finally {
@@ -452,6 +464,7 @@ export default function AdminRulesEditPage() {
                     <select
                       value={r.category}
                       onChange={(e) =>
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         setRules((prev) => prev.map((x) => (x.id === r.id ? { ...x, category: e.target.value as any } : x)))
                       }
                       className="mt-2 h-[46px] w-full rounded-2xl border border-slate-200/80 bg-white px-3 text-sm outline-none focus:ring-4 focus:ring-slate-200/70"
@@ -469,6 +482,7 @@ export default function AdminRulesEditPage() {
                     <select
                       value={r.level}
                       onChange={(e) =>
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         setRules((prev) => prev.map((x) => (x.id === r.id ? { ...x, level: e.target.value as any } : x)))
                       }
                       className="mt-2 h-[46px] w-full rounded-2xl border border-slate-200/80 bg-white px-3 text-sm outline-none focus:ring-4 focus:ring-slate-200/70"
@@ -486,6 +500,7 @@ export default function AdminRulesEditPage() {
                     <select
                       value={r.iconKey}
                       onChange={(e) =>
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         setRules((prev) => prev.map((x) => (x.id === r.id ? { ...x, iconKey: e.target.value as any } : x)))
                       }
                       className="mt-2 h-[46px] w-full rounded-2xl border border-slate-200/80 bg-white px-3 text-sm outline-none focus:ring-4 focus:ring-slate-200/70"

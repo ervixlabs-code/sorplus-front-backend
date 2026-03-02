@@ -18,14 +18,16 @@ import {
 } from "lucide-react"
 
 /* ================== API ================== */
-const API_BASE =
-  (process.env as any)?.NEXT_PUBLIC_API_BASE?.trim?.() ||
-  (process.env as any)?.EXPO_PUBLIC_API_BASE?.trim?.() ||
-  "http://localhost:3002"
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE || "https://sorplus-admin-backend.onrender.com").trim()
 
-function normalizeBase(raw: string) {
-  return (raw || "").trim().replace(/\/+$/, "")
+function normalizeApiBase(raw?: string) {
+  const base = (raw || "").trim()
+  const noTrail = base.replace(/\/+$/, "")
+  // base "…/api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
+  return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
+
+const API_BASE = normalizeApiBase(RAW_BASE)
 
 function getToken() {
   if (typeof window === "undefined") return ""
@@ -55,7 +57,7 @@ async function safeJson(res: Response) {
 
 async function apiGet(path: string) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "GET",
     headers: {
@@ -66,15 +68,17 @@ async function apiGet(path: string) {
   })
   const data = await safeJson(res)
   if (!res.ok) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const msg = (data && ((data as any).message || (data as any).error)) || `GET ${path} failed`
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg))
   }
   return data
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiPatch(path: string, body?: any) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "PATCH",
     headers: {
@@ -86,6 +90,7 @@ async function apiPatch(path: string, body?: any) {
   })
   const data = await safeJson(res)
   if (!res.ok) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const msg = (data && ((data as any).message || (data as any).error)) || `PATCH ${path} failed`
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg))
   }
@@ -94,7 +99,7 @@ async function apiPatch(path: string, body?: any) {
 
 async function apiDelete(path: string) {
   const token = getToken()
-  const base = normalizeBase(API_BASE)
+  const base = API_BASE
   const res = await fetch(`${base}${path}`, {
     method: "DELETE",
     headers: {
@@ -104,6 +109,7 @@ async function apiDelete(path: string) {
   })
   const data = await safeJson(res)
   if (!res.ok) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const msg = (data && ((data as any).message || (data as any).error)) || `DELETE ${path} failed`
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg))
   }
@@ -256,12 +262,15 @@ export default function AdminSecurityListPage() {
       setLoading(true)
       const qs = buildQuery()
       const data = await apiGet(`/api/admin/security?${qs}`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const arr = Array.isArray((data as any)?.items) ? (data as any).items : Array.isArray(data) ? data : []
       setItems(arr)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setTotal(Number((data as any)?.total ?? arr.length ?? 0))
-      if (!silent) showToast({ kind: "success", title: "Güncellendi" })
+      if (!silent) showToast({open: true, kind: "success", title: "Güncellendi" })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
-      showToast({ kind: "error", title: "Liste alınamadı", desc: e?.message || "Bir hata oluştu." })
+      showToast({ open: true, kind: "error", title: "Liste alınamadı", desc: e?.message || "Bir hata oluştu." })
       setItems([])
       setTotal(0)
     } finally {
@@ -307,14 +316,16 @@ export default function AdminSecurityListPage() {
     try {
       await apiPatch(`/api/admin/security/${encodeURIComponent(it.id)}/status`, { isActive: next })
       showToast({
+        open: true,
         kind: "success",
         title: next ? "Aktif edildi" : "Pasife alındı",
         desc: `${it.title} • ${it.category}`,
       })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       // rollback
       setItems((prev) => prev.map((x) => (x.id === it.id ? { ...x, isActive: !next } : x)))
-      showToast({ kind: "error", title: "Durum güncellenemedi", desc: e?.message || "Bir hata oluştu." })
+      showToast({open: true, kind: "error", title: "Durum güncellenemedi", desc: e?.message || "Bir hata oluştu." })
     }
   }
 
@@ -334,11 +345,12 @@ export default function AdminSecurityListPage() {
       try {
         pendingDeleteRef.current = null
         await apiDelete(`/api/admin/security/${encodeURIComponent(id)}`)
-        showToast({ kind: "success", title: "Silindi", desc: "Kayıt kalıcı olarak silindi." })
+        showToast({open: true, kind: "success", title: "Silindi", desc: "Kayıt kalıcı olarak silindi." })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (e: any) {
         setItems((prev) => [target, ...prev])
         setTotal((t) => (t || 0) + 1)
-        showToast({ kind: "error", title: "Silinemedi", desc: e?.message || "Bir hata oluştu." })
+        showToast({ open: true, kind: "error", title: "Silinemedi", desc: e?.message || "Bir hata oluştu." })
       }
     }, 5000)
 
@@ -346,6 +358,7 @@ export default function AdminSecurityListPage() {
 
     showToast(
       {
+        open: true,
         kind: "success",
         title: "Silindi (geri alınabilir)",
         desc: "5 saniye içinde geri alabilirsin.",
@@ -357,7 +370,7 @@ export default function AdminSecurityListPage() {
           pendingDeleteRef.current = null
           setItems((prev) => [restore, ...prev])
           setTotal((t) => (t || 0) + 1)
-          showToast({ kind: "success", title: "Geri alındı", desc: "Kayıt geri getirildi." })
+          showToast({open: true, kind: "success", title: "Geri alındı", desc: "Kayıt geri getirildi." })
         },
       },
       5200
