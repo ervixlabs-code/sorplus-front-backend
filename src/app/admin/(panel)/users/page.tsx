@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
-import React, { useEffect, useMemo, useRef, useState } from "react"
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import clsx from "clsx"
@@ -177,7 +177,7 @@ function labelKvkk(ok: boolean) {
 }
 
 /* ===================== Page ===================== */
-export default function AdminUsersPage() {
+function AdminUsersInner() {
   const router = useRouter()
   const pathname = usePathname()
   const sp = useSearchParams()
@@ -291,7 +291,7 @@ export default function AdminUsersPage() {
   function queueUndo(snapshot: UserRow[], count: number) {
     if (undoTimer.current) window.clearTimeout(undoTimer.current)
     setPendingDelete({ snapshot, open: true, count })
-    showToast("Silme Başarılı", "success")
+    showToast("Silme", "success")
     undoTimer.current = window.setTimeout(() => setPendingDelete(null), 5000)
   }
 
@@ -718,5 +718,13 @@ export default function AdminUsersPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function AdminUsersPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-600">Yükleniyor…</div>}>
+      <AdminUsersInner />
+    </Suspense>
   )
 }
