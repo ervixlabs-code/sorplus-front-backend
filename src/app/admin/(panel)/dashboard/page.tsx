@@ -225,14 +225,25 @@ type ApiList<T> =
   | { data: T[]; total?: number; take?: number; skip?: number }
   | T[]
 
-function extractList<T>(data: ApiList<T>): { items: T[]; total: number } {
-  if (Array.isArray(data)) return { items: data, total: data.length }
+function extractList<T>(data: ApiList<T> | any): { items: T[]; total: number } {
+  if (Array.isArray(data)) return { items: data as T[], total: data.length }
+
   if (data && typeof data === "object") {
     const anyData = data as any
-    if (Array.isArray(anyData.items)) return { items: anyData.items, total: Number(anyData.total ?? anyData.items.length) }
-    if (Array.isArray(anyData.data)) return { items: anyData.data, total: Number(anyData.total ?? anyData.data.length) }
+    if (Array.isArray(anyData.items))
+      return {
+        items: anyData.items as T[],
+        total: Number(anyData.total ?? anyData.items.length),
+      }
+
+    if (Array.isArray(anyData.data))
+      return {
+        items: anyData.data as T[],
+        total: Number(anyData.total ?? anyData.data.length),
+      }
   }
-  return { items: [], total: 0 }
+
+  return { items: [] as T[], total: 0 }
 }
 
 function toIsoDateKey(d: Date) {
@@ -310,7 +321,7 @@ export default function AdminDashboardPage() {
       let catMap: Record<string, string> = {}
       try {
         const catsRaw = await api<ApiList<ApiCategory>>(`/api/admin/categories`, { method: "GET" })
-        const { items: cats } = extractList(catsRaw)
+        const { items: cats } = extractList<ApiCategory>(catsRaw)
         cats.forEach((c) => {
           const id = String((c as any).id)
           const name = String((c as any).name || (c as any).title || "—")
@@ -331,7 +342,7 @@ export default function AdminDashboardPage() {
         compRaw = await api<ApiList<ApiComplaint>>(`/api/admin/complaints`, { method: "GET" })
       }
 
-      const { items, total } = extractList(compRaw)
+      const { items, total } = extractList<ApiComplaint>(compRaw)
       setComplaints(items)
       setComplaintsTotal(total)
     } catch (e: any) {
