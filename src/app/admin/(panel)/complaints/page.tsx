@@ -1,7 +1,7 @@
 // src/app/admin/complaints/page.tsx
 "use client"
 
-import React, { useEffect, useMemo, useRef, useState } from "react"
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import clsx from "clsx"
@@ -249,7 +249,7 @@ function Toast({ t, onClose }: { t: NonNullable<ToastState>; onClose: () => void
 }
 
 /* ================== PAGE ================== */
-export default function AdminComplaintsPage() {
+function AdminComplaintsInner() {
   const router = useRouter()
   const pathname = usePathname()
   const sp = useSearchParams()
@@ -909,5 +909,14 @@ export default function AdminComplaintsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+
+export default function AdminComplaintsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-600">Yükleniyor…</div>}>
+      <AdminComplaintsInner />
+    </Suspense>
   )
 }
