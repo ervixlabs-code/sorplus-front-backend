@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
-import React, { useEffect, useMemo, useRef, useState } from "react"
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import clsx from "clsx"
@@ -30,7 +30,6 @@ const RAW_BASE = (
 function normalizeApiBase(raw?: string) {
   const base = (raw || "").trim()
   const noTrail = base.replace(/\/+$/, "")
-  // base ".../api" ile bitiyorsa kırp (endpointlerde zaten /api/... var)
   return noTrail.endsWith("/api") ? noTrail.slice(0, -4) : noTrail
 }
 
@@ -86,7 +85,7 @@ async function api<T>(path: string, init?: RequestInit & { json?: any }): Promis
 
   if (!res.ok) {
     const msg =
-      (data && typeof data === "object" && (data.message || data.error)) ||
+      (data && typeof data === "object" && ((data as any).message || (data as any).error)) ||
       `HTTP ${res.status}`
 
     const err: ApiError = new Error(Array.isArray(msg) ? msg.join(", ") : String(msg))
@@ -108,7 +107,7 @@ type CategoryRow = {
   status: CategoryStatus
   sortOrder: number
   icon?: string | null
-  createdAt: string // display
+  createdAt: string
 }
 
 type ApiCategory = {
@@ -140,7 +139,6 @@ function normStatus(raw?: string | null): CategoryStatus {
   const s = String(raw || "").toUpperCase()
   if (s === "ACTIVE") return "ACTIVE"
   if (s === "INACTIVE") return "INACTIVE"
-  // fallback
   return "ACTIVE"
 }
 
@@ -156,15 +154,14 @@ function mapCategory(c: ApiCategory): CategoryRow {
   }
 }
 
-/** ===================== UI helpers ===================== */
 function badgeStatus(status: CategoryStatus) {
   return status === "ACTIVE"
     ? "bg-emerald-600/10 text-emerald-800 ring-1 ring-emerald-600/15"
     : "bg-rose-600/10 text-rose-800 ring-1 ring-rose-600/15"
 }
 
-/** ===================== Page ===================== */
-export default function AdminCategoriesPage() {
+/** ===================== INNER (uses useSearchParams) ===================== */
+function AdminCategoriesInner() {
   const router = useRouter()
   const pathname = usePathname()
   const sp = useSearchParams()
@@ -197,7 +194,8 @@ export default function AdminCategoriesPage() {
       if (v === undefined || v === "" || v === "ALL") params.delete(k)
       else params.set(k, String(v))
     })
-    router.push(`${pathname}?${params.toString()}`)
+    const qs = params.toString()
+    router.push(qs ? `${pathname}?${qs}` : pathname)
   }
 
   function applySearch() {
@@ -213,8 +211,6 @@ export default function AdminCategoriesPage() {
     setError(null)
 
     try {
-      // Backend dokümanı query demiyor; o yüzden güvenli şekilde client-side filtre uyguluyoruz.
-      // Yine de pagination için take/skip’i ekleyelim (backend desteklerse otomatik çalışır).
       const params = new URLSearchParams()
       params.set("skip", String(skip))
       params.set("take", String(take))
@@ -224,23 +220,12 @@ export default function AdminCategoriesPage() {
       })
 
       let rawItems: ApiCategory[] = []
-      let rawTotal = 0
 
-      if (Array.isArray(data)) {
-        rawItems = data
-        rawTotal = data.length
-      } else if ("items" in (data as any) && Array.isArray((data as any).items)) {
-        rawItems = (data as any).items
-        rawTotal = Number((data as any).total ?? rawItems.length)
-      } else if ("data" in (data as any) && Array.isArray((data as any).data)) {
-        rawItems = (data as any).data
-        rawTotal = Number((data as any).total ?? rawItems.length)
-      } else {
-        rawItems = []
-        rawTotal = 0
-      }
+      if (Array.isArray(data)) rawItems = data
+      else if ("items" in (data as any) && Array.isArray((data as any).items)) rawItems = (data as any).items
+      else if ("data" in (data as any) && Array.isArray((data as any).data)) rawItems = (data as any).data
+      else rawItems = []
 
-      // Map
       let mapped = rawItems.map(mapCategory)
 
       // Client-side filter (q + status)
@@ -251,16 +236,12 @@ export default function AdminCategoriesPage() {
           return hay.includes(qq)
         })
       }
-      if (status !== "ALL") {
-        mapped = mapped.filter((c) => c.status === status)
-      }
+      if (status !== "ALL") mapped = mapped.filter((c) => c.status === status)
 
-      // Sort: sortOrder asc, then name (TR)
-      mapped = [...mapped].sort((a, b) => (a.sortOrder - b.sortOrder) || a.name.localeCompare(b.name, "tr"))
+      // Sort
+      mapped = [...mapped].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "tr"))
 
-      // Eğer backend pagination desteklemiyorsa: total = mapped.length; sayfayı client-side dilimle
-      // Ama backend pagination desteklerse zaten rawTotal doğru gelir.
-      // Biz güvenli olmak için: total’ı mapped.length’e set edip, page slice yapacağız.
+      // Client pagination (always safe)
       const effectiveTotal = mapped.length
       const start = (page - 1) * pageSize
       const sliced = mapped.slice(start, start + pageSize)
@@ -291,7 +272,7 @@ export default function AdminCategoriesPage() {
     setSelected({})
   }, [safePage, q, status])
 
-  // “Hard delete” — UI-only undo (geri alma backend’de yok)
+  // undo UI-only
   const undoTimer = useRef<number | null>(null)
   const [pendingDelete, setPendingDelete] = useState<{
     snapshot: CategoryRow[]
@@ -319,19 +300,14 @@ export default function AdminCategoriesPage() {
     const snap = [...items]
 
     try {
-      // Optimistic
       setItems((p) => p.map((x) => (x.id === c.id ? { ...x, status: nextStatus } : x)))
 
-      // PATCH
       await api(`/api/admin/categories/${encodeURIComponent(c.id)}`, {
         method: "PATCH",
         json: { status: nextStatus },
       })
 
-      showToast(
-        `Durum güncellendi. ${nextStatus === "ACTIVE" ? "Kategori aktif" : "Kategori pasif"}.`,
-        "success"
-      )
+      showToast(`Durum güncellendi. ${nextStatus === "ACTIVE" ? "Kategori aktif" : "Kategori pasif"}.`, "success")
       fetchList()
     } catch (e: any) {
       setItems(snap)
@@ -343,9 +319,7 @@ export default function AdminCategoriesPage() {
     const snap = [...items]
 
     try {
-      // Optimistic UI
       setItems((p) => p.filter((x) => x.id !== id))
-
       await api(`/api/admin/categories/${encodeURIComponent(id)}`, { method: "DELETE" })
 
       showToast("Kategori silindi", "success")
@@ -362,7 +336,6 @@ export default function AdminCategoriesPage() {
     const snap = [...items]
 
     try {
-      // Optimistic remove (current page)
       setItems((p) => p.filter((x) => !selectedIds.includes(x.id)))
 
       for (const id of selectedIds) {
@@ -383,9 +356,7 @@ export default function AdminCategoriesPage() {
   function cxBtn(active: boolean) {
     return clsx(
       "rounded-2xl px-3 py-2 text-sm font-semibold border shadow-sm transition",
-      active
-        ? "bg-slate-900 text-white border-slate-900"
-        : "bg-white/80 border-slate-200/80 hover:bg-white"
+      active ? "bg-slate-900 text-white border-slate-900" : "bg-white/80 border-slate-200/80 hover:bg-white"
     )
   }
 
@@ -525,9 +496,7 @@ export default function AdminCategoriesPage() {
       <div className="rounded-2xl border border-slate-200/70 bg-white/80 backdrop-blur-xl shadow-[0_14px_50px_rgba(15,23,42,0.08)] overflow-hidden">
         <div className="px-5 py-4 flex items-center justify-between">
           <div className="text-sm font-semibold">Kayıtlar</div>
-          <div className="text-xs text-slate-500">
-            {loading ? "Yükleniyor…" : `Sayfa ${safePage} / ${totalPages}`}
-          </div>
+          <div className="text-xs text-slate-500">{loading ? "Yükleniyor…" : `Sayfa ${safePage} / ${totalPages}`}</div>
         </div>
 
         <div className="overflow-x-auto">
@@ -690,5 +659,14 @@ export default function AdminCategoriesPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+/** ===================== PAGE (Suspense wrapper) ===================== */
+export default function AdminCategoriesPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-slate-500">Yükleniyor…</div>}>
+      <AdminCategoriesInner />
+    </Suspense>
   )
 }
